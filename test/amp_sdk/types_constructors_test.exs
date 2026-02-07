@@ -1,0 +1,30 @@
+defmodule AmpSdk.TypesConstructorsTest do
+  use ExUnit.Case, async: true
+
+  alias AmpSdk.Error
+  alias AmpSdk.Types.{MCPHttpServer, MCPStdioServer, Permission}
+
+  test "Permission struct enforces required keys" do
+    assert_raise ArgumentError, fn -> struct!(Permission, %{action: "ask"}) end
+    assert_raise ArgumentError, fn -> struct!(Permission, %{tool: "Bash"}) end
+  end
+
+  test "Permission.new/3 returns typed error for invalid delegate options" do
+    assert {:error, %Error{kind: :invalid_configuration}} = Permission.new("Bash", "delegate", [])
+  end
+
+  test "MCPStdioServer and MCPHttpServer enforce required keys" do
+    assert_raise ArgumentError, fn -> struct!(MCPStdioServer, %{args: []}) end
+    assert_raise ArgumentError, fn -> struct!(MCPHttpServer, %{headers: %{}}) end
+  end
+
+  test "MCP constructors validate required values" do
+    assert {:error, %Error{kind: :invalid_configuration}} = MCPStdioServer.new(command: "")
+    assert {:error, %Error{kind: :invalid_configuration}} = MCPHttpServer.new(url: "")
+
+    assert {:ok, %MCPStdioServer{command: "npx"}} = MCPStdioServer.new(command: "npx")
+
+    assert {:ok, %MCPHttpServer{url: "https://example.com"}} =
+             MCPHttpServer.new(url: "https://example.com")
+  end
+end

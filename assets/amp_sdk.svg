@@ -1,0 +1,231 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Amp SDK for Elixir">
+  <defs>
+    <!-- Hexagon reusable path -->
+    <path id="hex" d="M100 7.7 L180.4 51.6 L180.4 139.6 L100 183.5 L19.6 139.6 L19.6 51.6Z"/>
+
+    <!-- Deep dark background -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0c0a1a"/>
+      <stop offset="50%" stop-color="#110e22"/>
+      <stop offset="100%" stop-color="#080714"/>
+    </linearGradient>
+
+    <!-- Primary electric violet accent -->
+    <linearGradient id="violet" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7"/>
+      <stop offset="50%" stop-color="#8b5cf6"/>
+      <stop offset="100%" stop-color="#7c3aed"/>
+    </linearGradient>
+
+    <!-- Warm amber accent (amplifier glow) -->
+    <linearGradient id="amber" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fbbf24"/>
+      <stop offset="50%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#d97706"/>
+    </linearGradient>
+
+    <!-- Hex border gradient -->
+    <linearGradient id="hexBorder" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.9"/>
+      <stop offset="35%" stop-color="#6d28d9" stop-opacity="0.6"/>
+      <stop offset="65%" stop-color="#f59e0b" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0.9"/>
+    </linearGradient>
+
+    <!-- Central core radial -->
+    <radialGradient id="coreGlow" cx="50%" cy="44%" r="55%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0.25"/>
+      <stop offset="40%" stop-color="#6d28d9" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#080714" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Amp bolt glow -->
+    <radialGradient id="boltGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fef3c7" stop-opacity="0.95"/>
+      <stop offset="30%" stop-color="#fbbf24" stop-opacity="0.6"/>
+      <stop offset="70%" stop-color="#f59e0b" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#d97706" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Signal wave gradient -->
+    <linearGradient id="waveGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a855f7" stop-opacity="0"/>
+      <stop offset="30%" stop-color="#a855f7" stop-opacity="0.7"/>
+      <stop offset="50%" stop-color="#c084fc" stop-opacity="0.9"/>
+      <stop offset="70%" stop-color="#a855f7" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#a855f7" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Circuit trace pattern -->
+    <pattern id="traces" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse" patternTransform="rotate(15)">
+      <line x1="0" y1="12" x2="24" y2="12" stroke="#a855f7" stroke-width="0.4" opacity="0.08"/>
+      <line x1="12" y1="0" x2="12" y2="24" stroke="#a855f7" stroke-width="0.4" opacity="0.06"/>
+      <circle cx="12" cy="12" r="1" fill="#c084fc" opacity="0.1"/>
+      <circle cx="0" cy="0" r="0.6" fill="#fbbf24" opacity="0.08"/>
+    </pattern>
+
+    <!-- Filters -->
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0c0a1a" flood-opacity="0.8"/>
+    </filter>
+
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <filter id="softGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <filter id="lineGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="1.8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+
+    <clipPath id="hexClip">
+      <use href="#hex"/>
+    </clipPath>
+
+    <!-- Noise texture via fractal -->
+    <filter id="noise" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch" result="n"/>
+      <feColorMatrix type="saturate" values="0" in="n" result="gn"/>
+      <feBlend in="SourceGraphic" in2="gn" mode="overlay" result="blend"/>
+      <feComponentTransfer in="blend">
+        <feFuncA type="linear" slope="0.03"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+
+  <!-- Outer hexagon with shadow -->
+  <g filter="url(#shadow)">
+    <use href="#hex" fill="url(#bgGrad)" stroke="url(#hexBorder)" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+
+  <g clip-path="url(#hexClip)">
+    <!-- Core ambient glow -->
+    <use href="#hex" fill="url(#coreGlow)"/>
+
+    <!-- Circuit trace background -->
+    <rect x="12" y="0" width="176" height="200" fill="url(#traces)" opacity="0.5"/>
+
+    <!-- Subtle noise grain overlay -->
+    <rect x="12" y="0" width="176" height="200" fill="#a855f7" opacity="0.02" filter="url(#noise)"/>
+
+    <!-- Concentric hex rings -->
+    <g opacity="0.12" fill="none" stroke="#c084fc" stroke-width="0.5">
+      <path d="M100 28 L155.7 60 L155.7 132 L100 164 L44.3 132 L44.3 60Z" stroke-dasharray="4 3"/>
+      <path d="M100 42 L143 68 L143 124 L100 150 L57 124 L57 68Z" stroke-dasharray="2 4"/>
+      <path d="M100 56 L130.3 76 L130.3 116 L100 136 L69.7 116 L69.7 76Z" stroke-dasharray="1.5 3"/>
+    </g>
+
+    <!-- Signal emission arcs (amplification waves) -->
+    <g fill="none" stroke-linecap="round" filter="url(#lineGlow)">
+      <!-- Left waves (input signal) -->
+      <path d="M52 82 Q42 96 52 110" stroke="#a855f7" stroke-width="1.8" opacity="0.5"/>
+      <path d="M44 76 Q30 96 44 116" stroke="#a855f7" stroke-width="1.4" opacity="0.35"/>
+      <path d="M37 70 Q19 96 37 122" stroke="#a855f7" stroke-width="1" opacity="0.2"/>
+
+      <!-- Right waves (amplified output - bigger, brighter) -->
+      <path d="M148 82 Q158 96 148 110" stroke="#f59e0b" stroke-width="2.2" opacity="0.6"/>
+      <path d="M156 74 Q172 96 156 118" stroke="#f59e0b" stroke-width="1.8" opacity="0.45"/>
+      <path d="M163 66 Q183 96 163 126" stroke="#fbbf24" stroke-width="1.3" opacity="0.3"/>
+      <path d="M169 60 Q193 96 169 132" stroke="#fbbf24" stroke-width="0.9" opacity="0.18"/>
+    </g>
+
+    <!-- Central amplifier symbol -->
+    <g transform="translate(100,96)">
+      <!-- Outer amplifier triangle (the classic op-amp shape) -->
+      <g filter="url(#softGlow)">
+        <path d="M-32 -28 L32 0 L-32 28Z" fill="none" stroke="url(#violet)" stroke-width="2.5" stroke-linejoin="round" opacity="0.7"/>
+      </g>
+
+      <!-- Inner triangle fill with subtle gradient -->
+      <path d="M-28 -23 L28 0 L-28 23Z" fill="#110e22" fill-opacity="0.8" stroke="#8b5cf6" stroke-width="0.8" stroke-linejoin="round" opacity="0.5"/>
+
+      <!-- The lightning bolt / amp symbol inside the triangle -->
+      <g filter="url(#glow)">
+        <path d="M-4 -14 L4 -4 L-2 -4 L4 14 L-4 4 L2 4Z" fill="url(#amber)" stroke="#fef3c7" stroke-width="0.6" stroke-linejoin="round"/>
+      </g>
+
+      <!-- Bolt center glow -->
+      <ellipse cx="0" cy="0" rx="8" ry="12" fill="url(#boltGlow)" opacity="0.4"/>
+
+      <!-- Input signal line (left) -->
+      <line x1="-50" y1="0" x2="-32" y2="0" stroke="url(#waveGrad)" stroke-width="1.8" stroke-linecap="round"/>
+
+      <!-- Input signal dots -->
+      <g fill="#c084fc" opacity="0.6">
+        <circle cx="-46" cy="0" r="1.2"/>
+        <circle cx="-40" cy="0" r="1.5"/>
+      </g>
+
+      <!-- + and - inputs on triangle -->
+      <text x="-22" y="-9" fill="#c084fc" font-family="monospace" font-size="8" font-weight="bold" opacity="0.7">+</text>
+      <text x="-22" y="12" fill="#c084fc" font-family="monospace" font-size="8" font-weight="bold" opacity="0.5">-</text>
+
+      <!-- Output line (right) -->
+      <line x1="32" y1="0" x2="50" y2="0" stroke="#f59e0b" stroke-width="2" stroke-linecap="round" filter="url(#lineGlow)"/>
+
+      <!-- Output signal dots (bigger = amplified) -->
+      <g fill="#fbbf24" opacity="0.7">
+        <circle cx="38" cy="0" r="1.8"/>
+        <circle cx="44" cy="0" r="2.2"/>
+      </g>
+
+      <!-- Power rails (V+ and V-) -->
+      <line x1="0" y1="-28" x2="0" y2="-38" stroke="#a855f7" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
+      <line x1="0" y1="28" x2="0" y2="38" stroke="#a855f7" stroke-width="1" stroke-linecap="round" opacity="0.4"/>
+      <circle cx="0" cy="-40" r="1.5" fill="#c084fc" opacity="0.5"/>
+      <circle cx="0" cy="40" r="1.5" fill="#7c3aed" opacity="0.5"/>
+
+      <!-- Tiny V+ / V- labels -->
+      <text x="4" y="-35" fill="#c084fc" font-family="monospace" font-size="5" opacity="0.45">V+</text>
+      <text x="4" y="39" fill="#7c3aed" font-family="monospace" font-size="5" opacity="0.4">V-</text>
+    </g>
+
+    <!-- Floating data particles -->
+    <g fill="#fef3c7" opacity="0.5">
+      <circle cx="70" cy="60" r="0.8">
+        <animate attributeName="opacity" values="0.3;0.7;0.3" dur="3s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="135" cy="65" r="1">
+        <animate attributeName="opacity" values="0.5;0.9;0.5" dur="2.5s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="65" cy="130" r="0.7">
+        <animate attributeName="opacity" values="0.2;0.6;0.2" dur="4s" repeatCount="indefinite"/>
+      </circle>
+      <circle cx="140" cy="128" r="0.9">
+        <animate attributeName="opacity" values="0.4;0.8;0.4" dur="3.5s" repeatCount="indefinite"/>
+      </circle>
+    </g>
+
+    <!-- Streaming data visualization (horizontal signal traces) -->
+    <g opacity="0.15" stroke-linecap="round">
+      <path d="M30 50 Q45 46 55 50 Q65 54 75 50" stroke="#c084fc" stroke-width="0.8" fill="none"/>
+      <path d="M30 142 Q45 146 55 142 Q65 138 75 142" stroke="#c084fc" stroke-width="0.8" fill="none"/>
+      <path d="M125 50 Q135 46 145 50 Q155 54 165 50" stroke="#fbbf24" stroke-width="1" fill="none"/>
+      <path d="M125 142 Q135 146 145 142 Q155 138 165 142" stroke="#fbbf24" stroke-width="1" fill="none"/>
+    </g>
+
+    <!-- Inner hex border highlight -->
+    <use href="#hex" fill="none" stroke="#a855f7" stroke-width="1" opacity="0.15"/>
+  </g>
+
+  <!-- Top edge light reflection -->
+  <g opacity="0.4">
+    <path d="M19.6 51.6 L100 7.7 L180.4 51.6" fill="none" stroke="#e9d5ff" stroke-width="1.2" stroke-linecap="round"/>
+  </g>
+
+  <!-- Vertex accents -->
+  <g opacity="0.5">
+    <circle cx="100" cy="7.7" r="2.5" fill="#e9d5ff"/>
+    <circle cx="180.4" cy="51.6" r="2" fill="#fbbf24" opacity="0.6"/>
+    <circle cx="19.6" cy="51.6" r="2" fill="#a855f7" opacity="0.6"/>
+    <circle cx="180.4" cy="139.6" r="1.5" fill="#f59e0b" opacity="0.4"/>
+    <circle cx="19.6" cy="139.6" r="1.5" fill="#7c3aed" opacity="0.4"/>
+    <circle cx="100" cy="183.5" r="2" fill="#8b5cf6" opacity="0.45"/>
+  </g>
+</svg>

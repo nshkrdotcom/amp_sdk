@@ -22,5 +22,8 @@ amp_sdk-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+# Dialyzer PLT files
+/priv/plts/
+
 # Amp Python SDK reference (proprietary, not for distribution)
 /amp/
