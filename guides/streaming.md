@@ -6,6 +6,8 @@ The Amp SDK uses a streaming architecture to deliver messages in real time as th
 
 `AmpSdk.execute/2` returns a lazy `Stream` that yields typed message structs. The stream is backed by `Stream.resource/3` — messages are produced as the CLI writes JSON Lines to stdout, and the stream halts automatically when a result message is received.
 
+The stream consumer uses selective receive for transport-tagged messages only. This means unrelated mailbox messages in the caller process are preserved, so `execute/2` can be used safely from OTP processes that also handle other messages.
+
 `execute/2` accepts either:
 - a string prompt (`--stream-json` / `--stream-json-thinking`)
 - a list of `UserInputMessage` values (`--stream-json-input`)

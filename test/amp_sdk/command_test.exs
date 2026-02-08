@@ -10,6 +10,10 @@ defmodule AmpSdk.CommandTest do
     #!/usr/bin/env bash
     set -euo pipefail
 
+    if [ -n "${AMP_TEST_PID_FILE:-}" ]; then
+      echo $$ > "$AMP_TEST_PID_FILE"
+    fi
+
     if [ -n "${AMP_TEST_ARGS_FILE:-}" ]; then
       printf '%s\n' "$@" > "$AMP_TEST_ARGS_FILE"
     fi
@@ -33,6 +37,31 @@ defmodule AmpSdk.CommandTest do
     """
 
     TestSupport.write_executable!(dir, "amp_stub", script)
+  end
+
+  defp process_alive?(pid) when is_integer(pid) do
+    case System.cmd("kill", ["-0", Integer.to_string(pid)], stderr_to_stdout: true) do
+      {_, 0} -> true
+      _ -> false
+    end
+  end
+
+  defp wait_until(fun, timeout_ms) do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_wait_until(fun, deadline)
+  end
+
+  defp do_wait_until(fun, deadline) do
+    if fun.() do
+      :ok
+    else
+      if System.monotonic_time(:millisecond) >= deadline do
+        :timeout
+      else
+        Process.sleep(20)
+        do_wait_until(fun, deadline)
+      end
+    end
   end
 
   test "run/2 executes command with resolved CLI" do
@@ -95,6 +124,38 @@ defmodule AmpSdk.CommandTest do
           assert error.kind == :command_timeout
           assert error.exit_code == 124
           assert error.message =~ "timed out"
+        end
+      )
+    after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "run/2 timeout stops spawned subprocess" do
+    dir = TestSupport.tmp_dir!("amp_command_timeout_cleanup")
+    amp_path = write_amp_stub!(dir)
+    pid_file = Path.join(dir, "amp_pid.txt")
+
+    try do
+      TestSupport.with_env(
+        %{
+          "AMP_CLI_PATH" => amp_path,
+          "AMP_TEST_SLEEP_SEC" => "2",
+          "AMP_TEST_PID_FILE" => pid_file
+        },
+        fn ->
+          assert {:error, %Error{kind: :command_timeout}} =
+                   Command.run(["threads", "list"], timeout: 30)
+
+          assert wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
+
+          pid =
+            pid_file
+            |> File.read!()
+            |> String.trim()
+            |> String.to_integer()
+
+          assert wait_until(fn -> not process_alive?(pid) end, 1_500) == :ok
         end
       )
     after

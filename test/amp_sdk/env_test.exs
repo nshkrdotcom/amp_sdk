@@ -49,4 +49,36 @@ defmodule AmpSdk.EnvTest do
       end
     )
   end
+
+  test "Command.run injects AMP_SDK_VERSION and does not forward non-whitelisted env keys" do
+    dir = TestSupport.tmp_dir!("amp_env_command_sdk_version")
+
+    amp_path =
+      TestSupport.write_executable!(
+        dir,
+        "amp_env_sdk_stub",
+        "#!/usr/bin/env bash\nset -euo pipefail\necho \"${AMP_SDK_VERSION:-missing}|${NOT_AMP_KEY:-missing}|${AMP_VALID_ALPHA:-missing}\"\n"
+      )
+
+    try do
+      TestSupport.with_env(
+        %{
+          "AMP_CLI_PATH" => amp_path,
+          "NOT_AMP_KEY" => "blocked",
+          "AMP_VALID_ALPHA" => "allowed"
+        },
+        fn ->
+          assert {:ok, output} = AmpSdk.Command.run(["threads", "list"])
+
+          [sdk_version, not_amp, amp_value] = String.split(output, "|", parts: 3)
+
+          assert sdk_version == AmpSdk.Env.sdk_version_tag()
+          assert not_amp == "missing"
+          assert amp_value == "allowed"
+        end
+      )
+    after
+      File.rm_rf(dir)
+    end
+  end
 end

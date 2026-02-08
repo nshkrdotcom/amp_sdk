@@ -95,6 +95,7 @@ AmpSdk.run("List files", %Options{mcp_config: mcp})
 | `AMP_SETTINGS_FILE` | Settings file path (alternative to `--settings-file` flag) |
 
 All `AMP_`-prefixed environment variables are automatically forwarded to the CLI subprocess.
+`AmpSdk.run/2` and `AmpSdk.execute/2` now share the same environment construction path, including automatic `AMP_SDK_VERSION` injection.
 
 Additional env vars per execution:
 
@@ -116,6 +117,17 @@ AmpSdk.run("task", %Options{
 ```
 
 These default to `false`. Set to `true` for headless/CI environments.
+
+## Option Key Normalization
+
+When building MCP structs from maps/keywords, avoid mixing atom and string forms of the same key with different values.
+
+```elixir
+# Invalid: conflicting values for the same key
+AmpSdk.Types.MCPStdioServer.new(%{command: "npx", "command" => "node"})
+```
+
+Conflicts are rejected with `{:error, %AmpSdk.Error{kind: :invalid_configuration}}` to prevent ambiguous configuration.
 
 ## Thinking Mode
 

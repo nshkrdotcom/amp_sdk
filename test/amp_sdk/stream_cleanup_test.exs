@@ -23,8 +23,28 @@ defmodule AmpSdk.StreamCleanupTest do
     TestSupport.write_executable!(dir, "amp_stream_cleanup_stub", script)
   end
 
+  defp write_stubborn_stream_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ -n "${AMP_TEST_PID_FILE:-}" ]; then
+      echo $$ > "$AMP_TEST_PID_FILE"
+    fi
+
+    trap '' TERM
+    trap '' INT
+
+    while true; do
+      sleep 1
+    done
+    """
+
+    TestSupport.write_executable!(dir, "amp_stream_stubborn_stub", script)
+  end
+
   defp process_alive?(pid) when is_integer(pid) do
-    case System.cmd("kill", ["-0", Integer.to_string(pid)]) do
+    case System.cmd("kill", ["-0", Integer.to_string(pid)], stderr_to_stdout: true) do
       {_, 0} -> true
       _ -> false
     end
@@ -87,6 +107,31 @@ defmodule AmpSdk.StreamCleanupTest do
 
         leaked = MapSet.difference(new_temp_dirs, existing_temp_dirs)
         assert MapSet.size(leaked) == 0
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "timeout cleanup force-stops stubborn subprocesses" do
+    dir = TestSupport.tmp_dir!("amp_stream_stubborn_cleanup")
+    pid_file = Path.join(dir, "amp_pid.txt")
+    amp_path = write_stubborn_stream_stub!(dir)
+
+    opts = %Options{
+      stream_timeout_ms: 50,
+      env: %{"AMP_TEST_PID_FILE" => pid_file}
+    }
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        messages = AmpSdk.execute("hello", opts) |> Enum.to_list()
+        assert [%AmpSdk.Types.ErrorResultMessage{} = msg] = messages
+        assert msg.error =~ "Timed out"
+
+        assert wait_until(fn -> File.exists?(pid_file) end, 1_000) == :ok
+        pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
+        assert wait_until(fn -> not process_alive?(pid) end, 4_000) == :ok
       end)
     after
       File.rm_rf(dir)

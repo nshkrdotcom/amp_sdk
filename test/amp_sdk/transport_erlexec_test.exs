@@ -69,6 +69,39 @@ defmodule AmpSdk.Transport.ErlexecTest do
     assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
   end
 
+  test "caps stderr buffer to configured tail size" do
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "printf '1234567890ABCDEFGHIJ' >&2"],
+        max_stderr_buffer_size: 8
+      )
+
+    ref = make_ref()
+    :ok = Erlexec.subscribe(transport, self(), ref)
+
+    assert_receive {:amp_sdk_transport, ^ref, {:stderr, stderr}}, 1_000
+    assert stderr == "CDEFGHIJ"
+    assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
+  end
+
+  test "uses shared task supervisor without per-transport fallback supervisor allocation" do
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "sleep 0.2"]
+      )
+
+    try do
+      state = :sys.get_state(transport)
+
+      assert state.task_supervisor == AmpSdk.TaskSupervisor
+      assert Map.get(state, :io_supervisor) in [nil, AmpSdk.TaskSupervisor]
+    after
+      Erlexec.close(transport)
+    end
+  end
+
   test "supports end_input/1 for EOF driven commands" do
     cat = System.find_executable("cat") || "cat"
 

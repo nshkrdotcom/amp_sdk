@@ -1,7 +1,7 @@
 defmodule AmpSdk.Command do
   @moduledoc false
 
-  alias AmpSdk.{Async, CLI, Env, Error, Exec}
+  alias AmpSdk.{CLI, Env, Error, Exec}
   alias AmpSdk.CLI.CommandSpec
 
   @default_timeout_ms 60_000
@@ -28,8 +28,7 @@ defmodule AmpSdk.Command do
     stdin = Keyword.get(opts, :stdin)
 
     cmd_opts =
-      []
-      |> maybe_put(:stderr_to_stdout, Keyword.get(opts, :stderr_to_stdout, true))
+      [stderr_to_stdout: Keyword.get(opts, :stderr_to_stdout, true)]
       |> maybe_put(:cd, Keyword.get(opts, :cd))
       |> maybe_put(:env, normalize_env(Keyword.get(opts, :env)))
 
@@ -54,13 +53,6 @@ defmodule AmpSdk.Command do
            context: %{program: command.program, args: command_args}
          )}
 
-      {:error, {:task_exit, reason}} ->
-        {:error,
-         Error.new(:task_exit, "Command worker exited: #{inspect(reason)}",
-           cause: reason,
-           context: %{program: command.program, args: command_args}
-         )}
-
       {:error, reason} ->
         {:error,
          Error.new(
@@ -73,44 +65,12 @@ defmodule AmpSdk.Command do
     end
   end
 
-  defp run_system_cmd(program, args, cmd_opts, stdin, :infinity) do
-    run_system_cmd_once(program, args, cmd_opts, stdin)
-  end
-
   defp run_system_cmd(program, args, cmd_opts, stdin, timeout)
-       when is_integer(timeout) and timeout >= 0 do
-    case Async.run_with_timeout(
-           fn -> run_system_cmd_once(program, args, cmd_opts, stdin) end,
-           timeout
-         ) do
-      {:ok, result} -> result
-      {:error, :timeout} -> {:error, :timeout}
-      {:error, {:task_exit, reason}} -> {:error, {:task_exit, reason}}
-    end
-  end
-
-  defp run_system_cmd_once(program, args, cmd_opts, nil) do
-    safe_system_cmd(program, args, cmd_opts)
-  end
-
-  defp run_system_cmd_once(program, args, cmd_opts, stdin) do
-    safe_erlexec_cmd(program, args, cmd_opts, stdin)
-  end
-
-  defp safe_system_cmd(program, args, cmd_opts) do
-    {:ok, System.cmd(program, args, cmd_opts)}
-  rescue
-    error ->
-      {:error, {:exception, error}}
-  catch
-    kind, reason ->
-      {:error, {kind, reason}}
-  end
-
-  defp safe_erlexec_cmd(program, args, cmd_opts, stdin) do
+       when timeout == :infinity or (is_integer(timeout) and timeout >= 0) do
     stderr_to_stdout = Keyword.get(cmd_opts, :stderr_to_stdout, true)
     cwd = Keyword.get(cmd_opts, :cd)
-    env = Env.merge_overrides(Keyword.get(cmd_opts, :env, %{}))
+    env = Env.build_cli_env(Keyword.get(cmd_opts, :env, %{}))
+    timeout_deadline = timeout_deadline(timeout)
 
     exec_opts =
       [:stdin, :stdout, :stderr, :monitor]
@@ -121,9 +81,20 @@ defmodule AmpSdk.Command do
 
     case :exec.run(cmd, exec_opts) do
       {:ok, pid, os_pid} ->
-        :ok = :exec.send(pid, IO.iodata_to_binary(stdin))
-        :ok = :exec.send(pid, :eof)
-        collect_erlexec_output(pid, os_pid, stderr_to_stdout, "", "")
+        with :ok <- send_stdin(pid, stdin) do
+          collect_erlexec_output(
+            pid,
+            os_pid,
+            stderr_to_stdout,
+            timeout_deadline,
+            [],
+            []
+          )
+        else
+          {:error, reason} ->
+            stop_exec(pid)
+            {:error, reason}
+        end
 
       {:error, reason} ->
         {:error, reason}
@@ -136,40 +107,194 @@ defmodule AmpSdk.Command do
       {:error, {kind, reason}}
   end
 
-  defp collect_erlexec_output(pid, os_pid, stderr_to_stdout, stdout, stderr) do
+  defp send_stdin(pid, nil), do: send_eof(pid)
+
+  defp send_stdin(pid, stdin) do
+    :ok = :exec.send(pid, IO.iodata_to_binary(stdin))
+    send_eof(pid)
+  catch
+    kind, reason ->
+      {:error, {:send_failed, {kind, reason}}}
+  end
+
+  defp send_eof(pid) do
+    :ok = :exec.send(pid, :eof)
+    :ok
+  catch
+    kind, reason ->
+      {:error, {:send_failed, {kind, reason}}}
+  end
+
+  defp collect_erlexec_output(
+         pid,
+         os_pid,
+         stderr_to_stdout,
+         :infinity,
+         stdout_chunks,
+         stderr_chunks
+       ) do
     receive do
       {:stdout, ^os_pid, data} ->
         data = IO.iodata_to_binary(data)
-        collect_erlexec_output(pid, os_pid, stderr_to_stdout, stdout <> data, stderr)
+
+        collect_erlexec_output(
+          pid,
+          os_pid,
+          stderr_to_stdout,
+          :infinity,
+          [data | stdout_chunks],
+          stderr_chunks
+        )
 
       {:stderr, ^os_pid, data} ->
         data = IO.iodata_to_binary(data)
 
         if stderr_to_stdout do
-          collect_erlexec_output(pid, os_pid, stderr_to_stdout, stdout <> data, stderr)
+          collect_erlexec_output(
+            pid,
+            os_pid,
+            stderr_to_stdout,
+            :infinity,
+            [data | stdout_chunks],
+            stderr_chunks
+          )
         else
-          collect_erlexec_output(pid, os_pid, stderr_to_stdout, stdout, stderr <> data)
+          collect_erlexec_output(
+            pid,
+            os_pid,
+            stderr_to_stdout,
+            :infinity,
+            stdout_chunks,
+            [data | stderr_chunks]
+          )
         end
 
       {:DOWN, ^os_pid, :process, ^pid, reason} ->
         exit_code = decode_exit_code(reason)
-        output = if stderr_to_stdout, do: stdout, else: stdout <> stderr
+        output = build_output(stderr_to_stdout, stdout_chunks, stderr_chunks)
         {:ok, {output, exit_code}}
     end
   end
 
+  defp collect_erlexec_output(
+         pid,
+         os_pid,
+         stderr_to_stdout,
+         deadline,
+         stdout_chunks,
+         stderr_chunks
+       ) do
+    case timeout_remaining(deadline) do
+      :expired ->
+        stop_exec(pid)
+        flush_erlexec_messages(pid, os_pid)
+        {:error, :timeout}
+
+      remaining_timeout ->
+        receive do
+          {:stdout, ^os_pid, data} ->
+            data = IO.iodata_to_binary(data)
+
+            collect_erlexec_output(
+              pid,
+              os_pid,
+              stderr_to_stdout,
+              deadline,
+              [data | stdout_chunks],
+              stderr_chunks
+            )
+
+          {:stderr, ^os_pid, data} ->
+            data = IO.iodata_to_binary(data)
+
+            if stderr_to_stdout do
+              collect_erlexec_output(
+                pid,
+                os_pid,
+                stderr_to_stdout,
+                deadline,
+                [data | stdout_chunks],
+                stderr_chunks
+              )
+            else
+              collect_erlexec_output(
+                pid,
+                os_pid,
+                stderr_to_stdout,
+                deadline,
+                stdout_chunks,
+                [data | stderr_chunks]
+              )
+            end
+
+          {:DOWN, ^os_pid, :process, ^pid, reason} ->
+            exit_code = decode_exit_code(reason)
+            output = build_output(stderr_to_stdout, stdout_chunks, stderr_chunks)
+            {:ok, {output, exit_code}}
+        after
+          remaining_timeout ->
+            stop_exec(pid)
+            flush_erlexec_messages(pid, os_pid)
+            {:error, :timeout}
+        end
+    end
+  end
+
+  defp build_output(stderr_to_stdout, stdout_chunks, stderr_chunks) do
+    stdout = stdout_chunks |> Enum.reverse() |> IO.iodata_to_binary()
+    stderr = stderr_chunks |> Enum.reverse() |> IO.iodata_to_binary()
+    if stderr_to_stdout, do: stdout, else: stdout <> stderr
+  end
+
+  defp timeout_deadline(:infinity), do: :infinity
+  defp timeout_deadline(timeout_ms), do: System.monotonic_time(:millisecond) + timeout_ms
+
+  defp timeout_remaining(deadline_ms) do
+    remaining = deadline_ms - System.monotonic_time(:millisecond)
+    if remaining <= 0, do: :expired, else: remaining
+  end
+
+  defp flush_erlexec_messages(pid, os_pid) do
+    receive do
+      {:stdout, ^os_pid, _data} ->
+        flush_erlexec_messages(pid, os_pid)
+
+      {:stderr, ^os_pid, _data} ->
+        flush_erlexec_messages(pid, os_pid)
+
+      {:DOWN, ^os_pid, :process, ^pid, _reason} ->
+        :ok
+    after
+      0 ->
+        :ok
+    end
+  end
+
+  defp stop_exec(pid) do
+    :exec.stop(pid)
+    :ok
+  catch
+    _, _ ->
+      :ok
+  end
+
   defp decode_exit_code(:normal), do: 0
   defp decode_exit_code(0), do: 0
-  defp decode_exit_code({:exit_status, code}) when is_integer(code), do: code
-  defp decode_exit_code({:status, code}) when is_integer(code), do: code
-  defp decode_exit_code(code) when is_integer(code), do: code
+
+  defp decode_exit_code({:exit_status, code}) when is_integer(code),
+    do: normalize_exit_status(code)
+
+  defp decode_exit_code({:status, code}) when is_integer(code), do: normalize_exit_status(code)
+  defp decode_exit_code(code) when is_integer(code), do: normalize_exit_status(code)
   defp decode_exit_code(_reason), do: 1
+
+  defp normalize_exit_status(code) when code > 255 and rem(code, 256) == 0, do: div(code, 256)
+  defp normalize_exit_status(code), do: code
 
   defp maybe_trim(output, true), do: String.trim(output)
   defp maybe_trim(output, _), do: output
 
   defp maybe_put(opts, _key, nil), do: opts
-  defp maybe_put(opts, _key, false), do: opts
   defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp normalize_env(nil), do: %{}

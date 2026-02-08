@@ -397,13 +397,14 @@ defmodule AmpSdk.Types do
 
       with {:ok, command} <- fetch_command(opts),
            {:ok, args} <- fetch_args(opts),
-           {:ok, env} <- fetch_env(opts) do
+           {:ok, env} <- fetch_env(opts),
+           {:ok, disabled} <- Config.fetch_option(opts, :disabled, false) do
         {:ok,
          %__MODULE__{
            command: command,
            args: Enum.map(args, &to_string/1),
            env: Config.normalize_string_map(env),
-           disabled: !!Config.read_option(opts, :disabled, false)
+           disabled: !!disabled
          }}
       end
     end
@@ -421,32 +422,32 @@ defmodule AmpSdk.Types do
     end
 
     defp fetch_command(opts) do
-      command = Config.read_option(opts, :command)
-
-      if is_binary(command) and String.trim(command) != "" do
-        {:ok, command}
-      else
-        {:error, Error.new(:invalid_configuration, "MCP stdio command cannot be empty")}
+      with {:ok, command} <- Config.fetch_option(opts, :command) do
+        if is_binary(command) and String.trim(command) != "" do
+          {:ok, command}
+        else
+          {:error, Error.new(:invalid_configuration, "MCP stdio command cannot be empty")}
+        end
       end
     end
 
     defp fetch_args(opts) do
-      args = Config.read_option(opts, :args, [])
-
-      if is_list(args) do
-        {:ok, args}
-      else
-        {:error, Error.new(:invalid_configuration, "MCP stdio args must be a list")}
+      with {:ok, args} <- Config.fetch_option(opts, :args, []) do
+        if is_list(args) do
+          {:ok, args}
+        else
+          {:error, Error.new(:invalid_configuration, "MCP stdio args must be a list")}
+        end
       end
     end
 
     defp fetch_env(opts) do
-      env = Config.read_option(opts, :env, %{})
-
-      if is_map(env) or is_list(env) do
-        {:ok, env}
-      else
-        {:error, Error.new(:invalid_configuration, "MCP stdio env must be map or keyword")}
+      with {:ok, env} <- Config.fetch_option(opts, :env, %{}) do
+        if is_map(env) or is_list(env) do
+          {:ok, env}
+        else
+          {:error, Error.new(:invalid_configuration, "MCP stdio env must be map or keyword")}
+        end
       end
     end
   end
@@ -469,13 +470,14 @@ defmodule AmpSdk.Types do
 
       with {:ok, url} <- fetch_url(opts),
            {:ok, headers} <- fetch_headers(opts),
-           {:ok, transport} <- fetch_transport(opts) do
+           {:ok, transport} <- fetch_transport(opts),
+           {:ok, disabled} <- Config.fetch_option(opts, :disabled, false) do
         {:ok,
          %__MODULE__{
            url: url,
            headers: Config.normalize_string_map(headers),
            transport: transport,
-           disabled: !!Config.read_option(opts, :disabled, false)
+           disabled: !!disabled
          }}
       end
     end
@@ -493,32 +495,32 @@ defmodule AmpSdk.Types do
     end
 
     defp fetch_url(opts) do
-      url = Config.read_option(opts, :url)
-
-      if is_binary(url) and String.trim(url) != "" do
-        {:ok, url}
-      else
-        {:error, Error.new(:invalid_configuration, "MCP HTTP url cannot be empty")}
+      with {:ok, url} <- Config.fetch_option(opts, :url) do
+        if is_binary(url) and String.trim(url) != "" do
+          {:ok, url}
+        else
+          {:error, Error.new(:invalid_configuration, "MCP HTTP url cannot be empty")}
+        end
       end
     end
 
     defp fetch_headers(opts) do
-      headers = Config.read_option(opts, :headers, %{})
-
-      if is_map(headers) or is_list(headers) do
-        {:ok, headers}
-      else
-        {:error, Error.new(:invalid_configuration, "MCP HTTP headers must be map or keyword")}
+      with {:ok, headers} <- Config.fetch_option(opts, :headers, %{}) do
+        if is_map(headers) or is_list(headers) do
+          {:ok, headers}
+        else
+          {:error, Error.new(:invalid_configuration, "MCP HTTP headers must be map or keyword")}
+        end
       end
     end
 
     defp fetch_transport(opts) do
-      transport = Config.read_option(opts, :transport)
-
-      if is_nil(transport) or is_binary(transport) do
-        {:ok, transport}
-      else
-        {:error, Error.new(:invalid_configuration, "MCP HTTP transport must be a string")}
+      with {:ok, transport} <- Config.fetch_option(opts, :transport) do
+        if is_nil(transport) or is_binary(transport) do
+          {:ok, transport}
+        else
+          {:error, Error.new(:invalid_configuration, "MCP HTTP transport must be a string")}
+        end
       end
     end
   end

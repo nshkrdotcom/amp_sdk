@@ -27,4 +27,16 @@ defmodule AmpSdk.TypesConstructorsTest do
     assert {:ok, %MCPHttpServer{url: "https://example.com"}} =
              MCPHttpServer.new(url: "https://example.com")
   end
+
+  test "MCP constructors reject conflicting atom and string keys" do
+    assert {:error, %Error{kind: :invalid_configuration, message: message}} =
+             MCPStdioServer.new(%{:command => "npx", "command" => "node"})
+
+    assert message =~ "conflicting values"
+
+    assert {:error, %Error{kind: :invalid_configuration, message: message}} =
+             MCPHttpServer.new(%{:url => "https://a.example", "url" => "https://b.example"})
+
+    assert message =~ "conflicting values"
+  end
 end

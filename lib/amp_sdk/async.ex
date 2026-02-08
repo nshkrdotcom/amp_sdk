@@ -1,6 +1,8 @@
 defmodule AmpSdk.Async do
   @moduledoc false
 
+  alias AmpSdk.TaskSupport
+
   @type shutdown_fun :: (-> :ok)
 
   @spec run_with_timeout((-> term()), non_neg_integer() | :infinity) ::
@@ -18,29 +20,50 @@ defmodule AmpSdk.Async do
       send(caller, {:amp_sdk_async_result, result_ref, fun.()})
     end
 
-    {task_pid, shutdown} = start_task(task_fun)
-    monitor_ref = Process.monitor(task_pid)
+    case start_task(task_fun) do
+      {:ok, task_pid, shutdown} ->
+        monitor_ref = Process.monitor(task_pid)
+        result = await_result(task_pid, monitor_ref, result_ref, timeout)
+        shutdown.()
+        result
 
-    result = await_result(task_pid, monitor_ref, result_ref, timeout)
-    shutdown.()
-    result
+      {:error, reason} ->
+        {:error, {:task_exit, {:task_start_failed, reason}}}
+    end
   end
 
-  @spec start_task((-> any())) :: {pid(), shutdown_fun()}
+  @spec start_task((-> any())) :: {:ok, pid(), shutdown_fun()} | {:error, term()}
   defp start_task(fun) do
-    {:ok, task_pid} = Task.Supervisor.start_child(AmpSdk.TaskSupervisor, fun)
-    {task_pid, fn -> :ok end}
+    case start_child(AmpSdk.TaskSupervisor, fun) do
+      {:ok, task_pid} ->
+        {:ok, task_pid, fn -> :ok end}
+
+      {:error, :noproc} ->
+        start_fallback_task(fun)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp start_fallback_task(fun) do
+    case start_child(TaskSupport.fallback_supervisor(), fun) do
+      {:ok, task_pid} ->
+        {:ok, task_pid, fn -> :ok end}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp start_child(supervisor, fun) do
+    Task.Supervisor.start_child(supervisor, fun)
   catch
     :exit, {:noproc, _} ->
-      {:ok, supervisor} = Task.Supervisor.start_link()
-      {:ok, task_pid} = Task.Supervisor.start_child(supervisor, fun)
+      {:error, :noproc}
 
-      shutdown = fn ->
-        Process.exit(supervisor, :normal)
-        :ok
-      end
-
-      {task_pid, shutdown}
+    :exit, reason ->
+      {:error, {:task_start_failed, reason}}
   end
 
   defp await_result(task_pid, monitor_ref, result_ref, timeout) do

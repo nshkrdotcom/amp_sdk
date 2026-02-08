@@ -87,4 +87,37 @@ defmodule AmpSdk.StreamExecuteTest do
       File.rm_rf(dir)
     end
   end
+
+  test "execute/2 does not consume unrelated mailbox messages" do
+    dir = TestSupport.tmp_dir!("amp_stream_mailbox")
+    amp_path = write_stream_stub!(dir)
+    marker = make_ref()
+
+    output_json =
+      Jason.encode!(%{
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        result: "mailbox-ok",
+        duration_ms: 1,
+        num_turns: 1
+      })
+
+    send(self(), {:unrelated_message, marker})
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        messages =
+          AmpSdk.execute("mailbox safety", %Options{
+            env: %{"AMP_TEST_OUTPUT_JSON" => output_json}
+          })
+          |> Enum.to_list()
+
+        assert [%ResultMessage{result: "mailbox-ok"}] = messages
+        assert_received {:unrelated_message, ^marker}
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
 end

@@ -567,11 +567,15 @@ end)
 | `AMP_TOOLBOX` | Path to toolbox scripts (also settable via `Options.toolbox`) |
 | `AMP_SDK_VERSION` | SDK identifier sent to CLI (auto-set to `elixir-<current package version>`) |
 
+`AmpSdk.run/2` and `AmpSdk.execute/2` use the same CLI env builder: base system keys (`PATH`, `HOME`, etc.), `AMP_*` keys, `Options.env` overrides, and automatic `AMP_SDK_VERSION` tagging.
+
 Additional env vars can be passed per-execution via `Options.env`:
 
 ```elixir
 AmpSdk.run("check env", %Options{env: %{"MY_VAR" => "value"}})
 ```
+
+For MCP config constructors, conflicting atom/string versions of the same key are rejected as `:invalid_configuration` to avoid ambiguous input maps.
 
 ---
 

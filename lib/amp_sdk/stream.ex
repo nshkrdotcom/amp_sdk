@@ -168,9 +168,6 @@ defmodule AmpSdk.Stream do
 
       {:amp_sdk_transport, ref, {:exit, reason}} when ref == state.transport_ref ->
         handle_transport_exit(reason, state)
-
-      _other ->
-        receive_next(state)
     after
       state.receive_timeout_ms ->
         timeout_error = %AmpSdk.Types.ErrorResultMessage{
@@ -243,8 +240,20 @@ defmodule AmpSdk.Stream do
 
   defp close_transport_with_timeout(transport, timeout_ms) when is_pid(transport) do
     ref = Process.monitor(transport)
-    safe_close(transport)
+    safe_force_close(transport)
 
+    receive do
+      {:DOWN, ^ref, :process, ^transport, _reason} ->
+        :ok
+    after
+      timeout_ms ->
+        safe_force_close(transport)
+        safe_kill(transport)
+        await_down_or_demonitor(ref, transport, 250)
+    end
+  end
+
+  defp await_down_or_demonitor(ref, transport, timeout_ms) do
     receive do
       {:DOWN, ^ref, :process, ^transport, _reason} ->
         :ok
@@ -257,6 +266,19 @@ defmodule AmpSdk.Stream do
 
   defp safe_close(transport) when is_pid(transport) do
     Erlexec.close(transport)
+  catch
+    :exit, _ -> :ok
+  end
+
+  defp safe_force_close(transport) when is_pid(transport) do
+    Erlexec.force_close(transport)
+  catch
+    :exit, _ -> :ok
+  end
+
+  defp safe_kill(transport) when is_pid(transport) do
+    Process.exit(transport, :kill)
+    :ok
   catch
     :exit, _ -> :ok
   end
@@ -484,8 +506,6 @@ defmodule AmpSdk.Stream do
   @doc false
   @spec build_env(Options.t()) :: map()
   def build_env(%Options{env: env, toolbox: toolbox}) do
-    base = Env.merge_overrides(env || %{})
-    base = if toolbox, do: Map.put(base, "AMP_TOOLBOX", toolbox), else: base
-    Map.put(base, "AMP_SDK_VERSION", Env.sdk_version_tag())
+    Env.build_cli_env(env || %{}, toolbox: toolbox)
   end
 end

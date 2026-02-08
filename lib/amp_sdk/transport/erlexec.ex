@@ -5,11 +5,12 @@ defmodule AmpSdk.Transport.Erlexec do
 
   import Kernel, except: [send: 2]
 
-  alias AmpSdk.Exec
+  alias AmpSdk.{Exec, TaskSupport}
 
   @behaviour AmpSdk.Transport
 
   @default_max_buffer_size 1_048_576
+  @default_max_stderr_buffer_size 262_144
   @default_call_timeout 5_000
   @max_lines_per_batch 200
 
@@ -21,11 +22,11 @@ defmodule AmpSdk.Transport.Erlexec do
             status: :disconnected,
             stderr_buffer: "",
             max_buffer_size: @default_max_buffer_size,
+            max_stderr_buffer_size: @default_max_stderr_buffer_size,
             overflowed?: false,
             pending_calls: %{},
             finalize_timer_ref: nil,
-            task_supervisor: AmpSdk.TaskSupervisor,
-            io_supervisor: nil
+            task_supervisor: AmpSdk.TaskSupervisor
 
   @type subscriber_info :: %{monitor_ref: reference(), tag: AmpSdk.Transport.subscription_tag()}
 
@@ -70,6 +71,17 @@ defmodule AmpSdk.Transport.Erlexec do
   end
 
   @impl AmpSdk.Transport
+  def force_close(transport) when is_pid(transport) do
+    case safe_call(transport, :force_close, 500) do
+      {:ok, :ok} ->
+        :ok
+
+      {:error, _reason} ->
+        force_kill_transport(transport)
+    end
+  end
+
+  @impl AmpSdk.Transport
   def end_input(transport) when is_pid(transport) do
     case safe_call(transport, :end_input) do
       {:ok, result} -> result
@@ -103,17 +115,20 @@ defmodule AmpSdk.Transport.Erlexec do
     task_supervisor = Keyword.get(opts, :task_supervisor, AmpSdk.TaskSupervisor)
     subscriber = Keyword.get(opts, :subscriber)
 
-    with {:ok, io_supervisor} <- Task.Supervisor.start_link(),
-         {:ok, state} <-
+    with {:ok, state} <-
            start_subprocess(
              command,
              args,
              cwd,
              env,
              subscriber,
-             io_supervisor,
              task_supervisor,
-             Keyword.get(opts, :max_buffer_size, @default_max_buffer_size)
+             Keyword.get(opts, :max_buffer_size, @default_max_buffer_size),
+             Keyword.get(
+               opts,
+               :max_stderr_buffer_size,
+               @default_max_stderr_buffer_size
+             )
            ) do
       {:ok, state}
     else
@@ -164,6 +179,11 @@ defmodule AmpSdk.Transport.Erlexec do
     {:reply, state.stderr_buffer, state}
   end
 
+  def handle_call(:force_close, _from, state) do
+    state = force_stop_subprocess(state)
+    {:stop, :normal, :ok, state}
+  end
+
   @impl GenServer
   def handle_info({:stdout, os_pid, data}, %{subprocess: {_pid, os_pid}} = state) do
     data = IO.iodata_to_binary(data)
@@ -179,7 +199,8 @@ defmodule AmpSdk.Transport.Erlexec do
 
   def handle_info({:stderr, _os_pid, data}, state) do
     data = IO.iodata_to_binary(data)
-    {:noreply, %{state | stderr_buffer: state.stderr_buffer <> data}}
+    stderr_buffer = append_stderr_data(state.stderr_buffer, data, state.max_stderr_buffer_size)
+    {:noreply, %{state | stderr_buffer: stderr_buffer}}
   end
 
   def handle_info({ref, result}, %{pending_calls: pending_calls} = state)
@@ -242,16 +263,8 @@ defmodule AmpSdk.Transport.Erlexec do
     state = cancel_finalize_timer(state)
     demonitor_subscribers(state.subscribers)
     cleanup_pending_calls(state.pending_calls)
-    stop_io_supervisor(state.io_supervisor)
-
-    case state.subprocess do
-      {pid, _} ->
-        :exec.stop(pid)
-        :ok
-
-      _ ->
-        :ok
-    end
+    _ = force_stop_subprocess(state)
+    :ok
   catch
     _, _ -> :ok
   end
@@ -285,14 +298,14 @@ defmodule AmpSdk.Transport.Erlexec do
          cwd,
          env,
          subscriber,
-         io_supervisor,
          task_supervisor,
-         max_buffer_size
+         max_buffer_size,
+         max_stderr_buffer_size
        ) do
     state = %__MODULE__{
       max_buffer_size: max_buffer_size,
-      task_supervisor: task_supervisor,
-      io_supervisor: io_supervisor
+      max_stderr_buffer_size: max_stderr_buffer_size,
+      task_supervisor: task_supervisor
     }
 
     exec_opts =
@@ -348,7 +361,7 @@ defmodule AmpSdk.Transport.Erlexec do
         {:ok, task}
 
       {:error, :noproc} ->
-        start_task(state.io_supervisor, fun)
+        start_task(TaskSupport.fallback_supervisor(), fun)
 
       {:error, reason} ->
         {:error, reason}
@@ -537,6 +550,21 @@ defmodule AmpSdk.Transport.Erlexec do
 
   defp flush_finalize_message(_), do: :ok
 
+  defp append_stderr_data(_existing, _data, max_size)
+       when not is_integer(max_size) or max_size <= 0,
+       do: ""
+
+  defp append_stderr_data(existing, data, max_size) do
+    combined = existing <> data
+    combined_size = byte_size(combined)
+
+    if combined_size <= max_size do
+      combined
+    else
+      :binary.part(combined, combined_size - max_size, max_size)
+    end
+  end
+
   defp cleanup_pending_calls(pending_calls) do
     Enum.each(pending_calls, fn {ref, from} ->
       Process.demonitor(ref, [:flush])
@@ -550,8 +578,33 @@ defmodule AmpSdk.Transport.Erlexec do
     end)
   end
 
-  defp stop_io_supervisor(nil), do: :ok
-  defp stop_io_supervisor(pid) when is_pid(pid), do: Process.exit(pid, :normal)
+  defp force_stop_subprocess(%{subprocess: {pid, _}} = state) do
+    stop_subprocess(pid)
+    %{state | subprocess: nil, status: :disconnected}
+  end
+
+  defp force_stop_subprocess(state), do: state
+
+  defp stop_subprocess(pid) when is_pid(pid) do
+    :exec.stop(pid)
+
+    if Process.alive?(pid) do
+      _ = :exec.kill(pid, 9)
+    end
+
+    :ok
+  catch
+    _, _ ->
+      :ok
+  end
+
+  defp force_kill_transport(pid) when is_pid(pid) do
+    Process.exit(pid, :kill)
+    :ok
+  catch
+    _, _ ->
+      :ok
+  end
 
   defp normalize_payload(message) when is_binary(message), do: message
 

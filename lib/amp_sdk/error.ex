@@ -101,6 +101,30 @@ defmodule AmpSdk.Error do
     )
   end
 
+  def normalize({:transport, reason} = tagged_reason, opts) do
+    kind = Keyword.get(opts, :kind, :transport_error)
+    message = Keyword.get(opts, :message, transport_reason_message(reason))
+
+    new(kind, message,
+      cause: Keyword.get(opts, :cause, tagged_reason),
+      details: Keyword.get(opts, :details),
+      context: Keyword.get(opts, :context),
+      exit_code: Keyword.get(opts, :exit_code)
+    )
+  end
+
+  def normalize({:task_exit, reason} = tagged_reason, opts) do
+    kind = Keyword.get(opts, :kind, :task_exit)
+    message = Keyword.get(opts, :message, "Task exited: #{inspect(reason)}")
+
+    new(kind, message,
+      cause: Keyword.get(opts, :cause, tagged_reason),
+      details: Keyword.get(opts, :details),
+      context: Keyword.get(opts, :context),
+      exit_code: Keyword.get(opts, :exit_code)
+    )
+  end
+
   def normalize(reason, opts) do
     kind = Keyword.get(opts, :kind, :unknown)
 
@@ -127,4 +151,7 @@ defmodule AmpSdk.Error do
 
   defp normalize_exit_code(code) when is_integer(code), do: code
   defp normalize_exit_code(_), do: nil
+
+  defp transport_reason_message(:not_connected), do: "Transport not connected"
+  defp transport_reason_message(reason), do: "Transport error: #{inspect(reason)}"
 end
