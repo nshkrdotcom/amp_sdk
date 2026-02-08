@@ -19,7 +19,7 @@ case AmpSdk.run("do something") do
 end
 ```
 
-Common `kind` values include `:cli_not_found`, `:command_timeout`, `:command_failed`, `:execution_failed`, and `:invalid_configuration`.
+Common `kind` values include `:cli_not_found`, `:command_timeout`, `:task_timeout`, `:command_failed`, `:execution_failed`, and `:invalid_configuration`.
 
 ## Exception Types
 
@@ -32,6 +32,20 @@ These can still be raised in explicit bang APIs or direct constructor usage:
 - `AmpSdk.Errors.AmpError`
 
 Use tuple returns where possible and pattern-match on `%AmpSdk.Error{}` in application code.
+
+## Low-Level Transport Errors
+
+At the low-level transport boundary (`AmpSdk.Transport.Erlexec`), errors are returned as tagged tuples:
+
+```elixir
+{:error, {:transport, reason}}
+```
+
+Normalize these when you need the unified envelope:
+
+```elixir
+error = AmpSdk.Error.normalize({:transport, :timeout}, kind: :transport_error)
+```
 
 ## Streaming Errors
 

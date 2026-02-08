@@ -5,6 +5,8 @@ defmodule AmpSdk.Errors do
   New code should use `AmpSdk.Error`.
   """
 
+  alias AmpSdk.Defaults
+
   defmodule AmpError do
     defexception [:message, :exit_code, :details]
 
@@ -40,14 +42,9 @@ defmodule AmpSdk.Errors do
     @impl true
     def exception(opts) when is_list(opts) do
       %__MODULE__{
-        message: Keyword.get(opts, :message, "Amp CLI not found"),
+        message: Keyword.get(opts, :message, Defaults.legacy_cli_not_found_message()),
         exit_code: 127,
-        details:
-          Keyword.get(
-            opts,
-            :details,
-            "Please install the Amp CLI: curl -fsSL https://ampcode.com/install.sh | bash"
-          )
+        details: Keyword.get(opts, :details, Defaults.legacy_cli_not_found_details())
       }
     end
 
@@ -55,7 +52,7 @@ defmodule AmpSdk.Errors do
       %__MODULE__{
         message: message,
         exit_code: 127,
-        details: "Please install the Amp CLI: curl -fsSL https://ampcode.com/install.sh | bash"
+        details: Defaults.legacy_cli_not_found_details()
       }
     end
   end

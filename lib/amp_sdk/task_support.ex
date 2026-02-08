@@ -1,39 +1,81 @@
 defmodule AmpSdk.TaskSupport do
   @moduledoc false
 
-  @fallback_key {__MODULE__, :fallback_supervisor}
-  @fallback_lock {__MODULE__, :fallback_supervisor_lock}
+  @default_supervisor AmpSdk.TaskSupervisor
 
-  @spec fallback_supervisor() :: pid()
-  def fallback_supervisor do
-    case current_fallback_supervisor() do
-      {:ok, pid} -> pid
-      :error -> ensure_fallback_supervisor()
+  @type task_start_error ::
+          :noproc | {:task_start_failed, term()} | {:application_start_failed, term()}
+
+  @spec start_child((-> any())) :: {:ok, pid()} | {:error, task_start_error()}
+  def start_child(fun) when is_function(fun, 0) do
+    start_child(@default_supervisor, fun)
+  end
+
+  @spec start_child(pid() | atom(), (-> any())) :: {:ok, pid()} | {:error, task_start_error()}
+  def start_child(supervisor, fun) when is_function(fun, 0) do
+    with :ok <- ensure_started_for(supervisor) do
+      maybe_retry_noproc(supervisor, fn -> do_start_child(supervisor, fun) end)
     end
   end
 
-  defp ensure_fallback_supervisor do
-    :global.trans(@fallback_lock, fn ->
-      case current_fallback_supervisor() do
-        {:ok, pid} -> pid
-        :error -> start_and_store_fallback_supervisor()
-      end
-    end)
+  @spec async_nolink((-> any())) :: {:ok, Task.t()} | {:error, task_start_error()}
+  def async_nolink(fun) when is_function(fun, 0) do
+    async_nolink(@default_supervisor, fun)
   end
 
-  defp start_and_store_fallback_supervisor do
-    {:ok, pid} = Task.Supervisor.start_link()
-    :persistent_term.put(@fallback_key, pid)
-    pid
-  end
-
-  defp current_fallback_supervisor do
-    case :persistent_term.get(@fallback_key, nil) do
-      pid when is_pid(pid) ->
-        if Process.alive?(pid), do: {:ok, pid}, else: :error
-
-      _ ->
-        :error
+  @spec async_nolink(pid() | atom(), (-> any())) :: {:ok, Task.t()} | {:error, task_start_error()}
+  def async_nolink(supervisor, fun) when is_function(fun, 0) do
+    with :ok <- ensure_started_for(supervisor) do
+      maybe_retry_noproc(supervisor, fn -> do_async_nolink(supervisor, fun) end)
     end
+  end
+
+  defp maybe_retry_noproc(@default_supervisor = supervisor, starter) do
+    case starter.() do
+      {:error, :noproc} ->
+        with :ok <- ensure_started_for(supervisor) do
+          starter.()
+        end
+
+      result ->
+        result
+    end
+  end
+
+  defp maybe_retry_noproc(_supervisor, starter), do: starter.()
+
+  defp ensure_started_for(@default_supervisor) do
+    case Application.ensure_all_started(:amp_sdk) do
+      {:ok, _started_apps} -> :ok
+      {:error, reason} -> {:error, {:application_start_failed, reason}}
+    end
+  end
+
+  defp ensure_started_for(_supervisor), do: :ok
+
+  defp do_start_child(supervisor, fun) do
+    Task.Supervisor.start_child(supervisor, fun)
+  catch
+    :exit, {:noproc, _} ->
+      {:error, :noproc}
+
+    :exit, :noproc ->
+      {:error, :noproc}
+
+    :exit, reason ->
+      {:error, {:task_start_failed, reason}}
+  end
+
+  defp do_async_nolink(supervisor, fun) do
+    {:ok, Task.Supervisor.async_nolink(supervisor, fun)}
+  catch
+    :exit, {:noproc, _} ->
+      {:error, :noproc}
+
+    :exit, :noproc ->
+      {:error, :noproc}
+
+    :exit, reason ->
+      {:error, {:task_start_failed, reason}}
   end
 end

@@ -1,7 +1,7 @@
 defmodule AmpSdk.Review do
   @moduledoc "Code review via the Amp CLI."
 
-  alias AmpSdk.{CommandRunner, Error}
+  alias AmpSdk.{CLIInvoke, Error}
 
   @default_timeout_ms 300_000
 
@@ -25,6 +25,6 @@ defmodule AmpSdk.Review do
     args = if check_filter != [], do: args ++ ["--check-filter" | check_filter], else: args
     args = if summary_only, do: args ++ ["--summary-only"], else: args
 
-    CommandRunner.run(args, Keyword.take(opts, [:timeout]), @default_timeout_ms)
+    CLIInvoke.invoke(args, Keyword.put(opts, :default_timeout_ms, @default_timeout_ms))
   end
 end

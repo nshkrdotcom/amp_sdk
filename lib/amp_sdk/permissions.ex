@@ -1,11 +1,11 @@
 defmodule AmpSdk.Permissions do
   @moduledoc "Permission management via the Amp CLI."
 
-  alias AmpSdk.{CommandRunner, Error}
+  alias AmpSdk.{CLIInvoke, Error}
 
   @spec list() :: {:ok, String.t()} | {:error, Error.t()}
   def list do
-    CommandRunner.run(["permissions", "list"])
+    CLIInvoke.invoke(["permissions", "list"])
   end
 
   @spec test(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
@@ -19,7 +19,7 @@ defmodule AmpSdk.Permissions do
         {key, value}, acc -> acc ++ ["--#{key}", to_string(value)]
       end)
 
-    CommandRunner.run(args, Keyword.take(opts, [:timeout]))
+    CLIInvoke.invoke(args, opts)
   end
 
   @spec add(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
@@ -29,6 +29,6 @@ defmodule AmpSdk.Permissions do
     args = if opts[:to], do: args ++ ["--to", to_string(opts[:to])], else: args
     args = if opts[:workspace], do: args ++ ["--workspace"], else: args
 
-    CommandRunner.run(args, Keyword.take(opts, [:timeout]))
+    CLIInvoke.invoke(args, opts)
   end
 end

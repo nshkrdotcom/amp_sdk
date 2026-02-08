@@ -1,16 +1,16 @@
 defmodule AmpSdk.Tools do
   @moduledoc "Tool management via the Amp CLI."
 
-  alias AmpSdk.{CommandRunner, Error}
+  alias AmpSdk.{CLIInvoke, Error}
 
   @spec list() :: {:ok, String.t()} | {:error, Error.t()}
   def list do
-    CommandRunner.run(["tools", "list"])
+    CLIInvoke.invoke(["tools", "list"])
   end
 
   @spec show(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def show(tool_name) when is_binary(tool_name) do
-    CommandRunner.run(["tools", "show", tool_name])
+    CLIInvoke.invoke(["tools", "show", tool_name])
   end
 
   @spec use(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
@@ -32,12 +32,12 @@ defmodule AmpSdk.Tools do
       |> Keyword.take([:timeout])
       |> maybe_put_stdin(Keyword.get(opts, :input))
 
-    CommandRunner.run(args, run_opts)
+    CLIInvoke.invoke(args, run_opts)
   end
 
   @spec make(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def make(tool_name) when is_binary(tool_name) do
-    CommandRunner.run(["tools", "make", tool_name])
+    CLIInvoke.invoke(["tools", "make", tool_name])
   end
 
   defp maybe_put_stdin(run_opts, nil), do: run_opts

@@ -541,6 +541,8 @@ end
 
 Exceptional conditions (for example invalid settings JSON) can still raise typed errors such as `AmpSdk.Errors.AmpError`.
 
+Internal timeout/task helpers also normalize into `%AmpSdk.Error{}` kinds (for example `:task_timeout`).
+
 Streaming failures are surfaced inline as `ErrorResultMessage` structs:
 
 ```elixir
@@ -554,6 +556,8 @@ Streaming failures are surfaced inline as `ErrorResultMessage` structs:
   _msg -> :ok
 end)
 ```
+
+Low-level transport APIs (`AmpSdk.Transport.Erlexec`) return tagged tuples like `{:error, {:transport, reason}}`; use `AmpSdk.Error.normalize/2` when you want the unified envelope there as well.
 
 ---
 

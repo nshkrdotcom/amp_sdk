@@ -1,10 +1,11 @@
 defmodule AmpSdk.Command do
   @moduledoc false
 
-  alias AmpSdk.{CLI, Env, Error, Exec}
+  alias AmpSdk.{CLI, Defaults, Env, Error, Exec}
   alias AmpSdk.CLI.CommandSpec
 
-  @default_timeout_ms 60_000
+  @stop_wait_ms 200
+  @kill_wait_ms 500
 
   @type run_opt ::
           {:timeout, non_neg_integer() | :infinity}
@@ -23,7 +24,7 @@ defmodule AmpSdk.Command do
 
   @spec run(CommandSpec.t(), [String.t()], [run_opt()]) :: {:ok, String.t()} | {:error, Error.t()}
   def run(%CommandSpec{} = command, args, opts) when is_list(args) and is_list(opts) do
-    timeout = Keyword.get(opts, :timeout, @default_timeout_ms)
+    timeout = Keyword.get(opts, :timeout, Defaults.command_timeout_ms())
     trim_output = Keyword.get(opts, :trim_output, true)
     stdin = Keyword.get(opts, :stdin)
 
@@ -92,7 +93,7 @@ defmodule AmpSdk.Command do
           )
         else
           {:error, reason} ->
-            stop_exec(pid)
+            stop_exec_and_confirm_down(pid, os_pid)
             {:error, reason}
         end
 
@@ -186,8 +187,7 @@ defmodule AmpSdk.Command do
        ) do
     case timeout_remaining(deadline) do
       :expired ->
-        stop_exec(pid)
-        flush_erlexec_messages(pid, os_pid)
+        stop_exec_and_confirm_down(pid, os_pid)
         {:error, :timeout}
 
       remaining_timeout ->
@@ -233,8 +233,7 @@ defmodule AmpSdk.Command do
             {:ok, {output, exit_code}}
         after
           remaining_timeout ->
-            stop_exec(pid)
-            flush_erlexec_messages(pid, os_pid)
+            stop_exec_and_confirm_down(pid, os_pid)
             {:error, :timeout}
         end
     end
@@ -252,6 +251,32 @@ defmodule AmpSdk.Command do
   defp timeout_remaining(deadline_ms) do
     remaining = deadline_ms - System.monotonic_time(:millisecond)
     if remaining <= 0, do: :expired, else: remaining
+  end
+
+  defp stop_exec_and_confirm_down(pid, os_pid) do
+    stop_exec(pid)
+
+    case await_exec_down(pid, os_pid, @stop_wait_ms) do
+      :down ->
+        flush_erlexec_messages(pid, os_pid)
+        :ok
+
+      :timeout ->
+        kill_exec(pid)
+        _ = await_exec_down(pid, os_pid, @kill_wait_ms)
+        flush_erlexec_messages(pid, os_pid)
+        :ok
+    end
+  end
+
+  defp await_exec_down(pid, os_pid, timeout_ms) do
+    receive do
+      {:DOWN, ^os_pid, :process, ^pid, _reason} ->
+        :down
+    after
+      timeout_ms ->
+        :timeout
+    end
   end
 
   defp flush_erlexec_messages(pid, os_pid) do
@@ -272,6 +297,14 @@ defmodule AmpSdk.Command do
 
   defp stop_exec(pid) do
     :exec.stop(pid)
+    :ok
+  catch
+    _, _ ->
+      :ok
+  end
+
+  defp kill_exec(pid) do
+    :exec.kill(pid, 9)
     :ok
   catch
     _, _ ->

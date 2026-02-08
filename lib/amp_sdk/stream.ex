@@ -240,14 +240,27 @@ defmodule AmpSdk.Stream do
 
   defp close_transport_with_timeout(transport, timeout_ms) when is_pid(transport) do
     ref = Process.monitor(transport)
-    safe_force_close(transport)
+    _ = safe_force_close(transport)
+    await_down_or_shutdown(ref, transport, timeout_ms)
+  end
 
+  defp await_down_or_shutdown(ref, transport, timeout_ms) do
     receive do
       {:DOWN, ^ref, :process, ^transport, _reason} ->
         :ok
     after
       timeout_ms ->
-        safe_force_close(transport)
+        safe_shutdown(transport)
+        await_down_or_kill(ref, transport, 250)
+    end
+  end
+
+  defp await_down_or_kill(ref, transport, timeout_ms) do
+    receive do
+      {:DOWN, ^ref, :process, ^transport, _reason} ->
+        :ok
+    after
+      timeout_ms ->
         safe_kill(transport)
         await_down_or_demonitor(ref, transport, 250)
     end
@@ -272,6 +285,13 @@ defmodule AmpSdk.Stream do
 
   defp safe_force_close(transport) when is_pid(transport) do
     Erlexec.force_close(transport)
+  catch
+    :exit, _ -> {:error, {:transport, :not_connected}}
+  end
+
+  defp safe_shutdown(transport) when is_pid(transport) do
+    Process.exit(transport, :shutdown)
+    :ok
   catch
     :exit, _ -> :ok
   end

@@ -21,6 +21,7 @@ defmodule AmpSdk.Error do
           | :invalid_configuration
           | :execution_failed
           | :no_result
+          | :task_timeout
           | :task_exit
           | :unknown
 

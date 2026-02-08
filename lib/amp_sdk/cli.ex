@@ -3,7 +3,7 @@ defmodule AmpSdk.CLI do
 
   import Bitwise
 
-  alias AmpSdk.Error
+  alias AmpSdk.{Defaults, Error}
 
   defmodule CommandSpec do
     @moduledoc "Executable command configuration for invoking the Amp CLI."
@@ -28,7 +28,7 @@ defmodule AmpSdk.CLI do
       {:error,
        Error.new(
          :cli_not_found,
-         "Amp CLI not found. Install it with: curl -fsSL https://ampcode.com/install.sh | bash",
+         Defaults.cli_not_found_message(),
          exit_code: 127
        )}
     end

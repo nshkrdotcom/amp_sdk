@@ -156,4 +156,31 @@ defmodule AmpSdk.Transport.ErlexecTest do
     assert :disconnected = Erlexec.status(transport)
     assert "" = Erlexec.stderr(transport)
   end
+
+  test "force_close/1 returns timeout error without killing an unresponsive transport" do
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "sleep 5"]
+      )
+
+    monitor_ref = Process.monitor(transport)
+
+    try do
+      :ok = :sys.suspend(transport)
+
+      assert {:error, {:transport, :timeout}} = Erlexec.force_close(transport)
+      assert Process.alive?(transport)
+      refute_received {:DOWN, ^monitor_ref, :process, ^transport, _reason}
+
+      :ok = :sys.resume(transport)
+      assert :ok = Erlexec.force_close(transport)
+      assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 1_500
+    after
+      if Process.alive?(transport) do
+        _ = Process.exit(transport, :kill)
+        assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 1_500
+      end
+    end
+  end
 end

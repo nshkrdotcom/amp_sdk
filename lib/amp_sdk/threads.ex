@@ -1,7 +1,7 @@
 defmodule AmpSdk.Threads do
   @moduledoc "Thread management via the Amp CLI."
 
-  alias AmpSdk.{CommandRunner, Error}
+  alias AmpSdk.{CLIInvoke, Error}
 
   @type visibility :: :private | :public | :workspace | :group
 
@@ -12,17 +12,17 @@ defmodule AmpSdk.Threads do
     args = ["threads", "new"]
     args = if visibility, do: args ++ ["--visibility", to_string(visibility)], else: args
 
-    CommandRunner.run(args, Keyword.take(opts, [:timeout]))
+    CLIInvoke.invoke(args, opts)
   end
 
   @spec markdown(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def markdown(thread_id) when is_binary(thread_id) do
-    CommandRunner.run(["threads", "markdown", thread_id])
+    CLIInvoke.invoke(["threads", "markdown", thread_id])
   end
 
   @spec list() :: {:ok, String.t()} | {:error, Error.t()}
   def list do
-    CommandRunner.run(["threads", "list"])
+    CLIInvoke.invoke(["threads", "list"])
   end
 
   @spec search(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
@@ -32,7 +32,7 @@ defmodule AmpSdk.Threads do
     args = if opts[:offset], do: args ++ ["--offset", to_string(opts[:offset])], else: args
     args = if opts[:json], do: args ++ ["--json"], else: args
 
-    CommandRunner.run(args, Keyword.take(opts, [:timeout]))
+    CLIInvoke.invoke(args, opts)
   end
 
   @spec share(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
@@ -50,31 +50,31 @@ defmodule AmpSdk.Threads do
         _ -> args
       end
 
-    CommandRunner.run(args, Keyword.take(opts, [:timeout]))
+    CLIInvoke.invoke(args, opts)
   end
 
   @spec rename(String.t(), String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def rename(thread_id, name) when is_binary(thread_id) and is_binary(name) do
-    CommandRunner.run(["threads", "rename", thread_id, name])
+    CLIInvoke.invoke(["threads", "rename", thread_id, name])
   end
 
   @spec archive(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def archive(thread_id) when is_binary(thread_id) do
-    CommandRunner.run(["threads", "archive", thread_id])
+    CLIInvoke.invoke(["threads", "archive", thread_id])
   end
 
   @spec delete(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def delete(thread_id) when is_binary(thread_id) do
-    CommandRunner.run(["threads", "delete", thread_id])
+    CLIInvoke.invoke(["threads", "delete", thread_id])
   end
 
   @spec handoff(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def handoff(thread_id) when is_binary(thread_id) do
-    CommandRunner.run(["threads", "handoff", thread_id])
+    CLIInvoke.invoke(["threads", "handoff", thread_id])
   end
 
   @spec replay(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def replay(thread_id) when is_binary(thread_id) do
-    CommandRunner.run(["threads", "replay", thread_id])
+    CLIInvoke.invoke(["threads", "replay", thread_id])
   end
 end

@@ -76,8 +76,11 @@ defmodule AmpSdk.Transport.Erlexec do
       {:ok, :ok} ->
         :ok
 
-      {:error, _reason} ->
-        force_kill_transport(transport)
+      {:error, :not_connected} ->
+        :ok
+
+      {:error, reason} ->
+        transport_error(reason)
     end
   end
 
@@ -356,26 +359,7 @@ defmodule AmpSdk.Transport.Erlexec do
   end
 
   defp start_io_task(state, fun) when is_function(fun, 0) do
-    case start_task(state.task_supervisor, fun) do
-      {:ok, task} ->
-        {:ok, task}
-
-      {:error, :noproc} ->
-        start_task(TaskSupport.fallback_supervisor(), fun)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp start_task(supervisor, fun) do
-    {:ok, Task.Supervisor.async_nolink(supervisor, fun)}
-  catch
-    :exit, {:noproc, _} ->
-      {:error, :noproc}
-
-    :exit, reason ->
-      {:error, {:task_start_failed, reason}}
+    TaskSupport.async_nolink(state.task_supervisor, fun)
   end
 
   defp send_payload(pid, message) do
@@ -587,19 +571,8 @@ defmodule AmpSdk.Transport.Erlexec do
 
   defp stop_subprocess(pid) when is_pid(pid) do
     :exec.stop(pid)
+    _ = :exec.kill(pid, 9)
 
-    if Process.alive?(pid) do
-      _ = :exec.kill(pid, 9)
-    end
-
-    :ok
-  catch
-    _, _ ->
-      :ok
-  end
-
-  defp force_kill_transport(pid) when is_pid(pid) do
-    Process.exit(pid, :kill)
     :ok
   catch
     _, _ ->

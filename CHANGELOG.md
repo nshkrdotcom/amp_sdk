@@ -40,4 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tools_use/2` no longer forces `stdin: nil` (prevents headless hangs/timeouts when no input is provided).
 - `review/1` updated to support global `--dangerously-allow-all` placement before `review`.
 - Delegate/signature and wrapper behavior alignment for `threads_share/2` and management command argument construction.
+- Internal task spawning now relies on OTP-supervised `AmpSdk.TaskSupervisor` startup (`Application.ensure_all_started/1`) instead of ad-hoc fallback supervisor singletons.
+- Internal command timeout/send-failure cleanup now uses stop-then-kill escalation with explicit DOWN confirmation to avoid orphaned subprocesses and mailbox noise.
+- Transport shutdown escalation now reports force-close call-timeout errors instead of internally killing the GenServer process.
+- Stream cleanup escalation now uses `:shutdown` before `:kill` for transport teardown.
+- Async timeout/task-exit paths now return `%AmpSdk.Error{}` (`:task_timeout`, `:task_exit`) consistently.
+- Shared defaults/messages and a shared wrapper invocation helper were added to remove duplicated timeout constants and CLI invocation glue.
 - Warning cleanup and docs/examples synchronization with current CLI behavior.

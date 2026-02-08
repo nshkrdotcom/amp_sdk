@@ -39,11 +39,37 @@ defmodule AmpSdk.CommandTest do
     TestSupport.write_executable!(dir, "amp_stub", script)
   end
 
+  defp write_stubborn_amp_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ -n "${AMP_TEST_PID_FILE:-}" ]; then
+      echo $$ > "$AMP_TEST_PID_FILE"
+    fi
+
+    trap '' TERM
+    trap '' INT
+
+    while true; do
+      echo "tick"
+      sleep 0.05
+    done
+    """
+
+    TestSupport.write_executable!(dir, "amp_stubborn_stub", script)
+  end
+
   defp process_alive?(pid) when is_integer(pid) do
     case System.cmd("kill", ["-0", Integer.to_string(pid)], stderr_to_stdout: true) do
       {_, 0} -> true
       _ -> false
     end
+  end
+
+  defp kill_process(pid) when is_integer(pid) do
+    _ = System.cmd("kill", ["-9", Integer.to_string(pid)], stderr_to_stdout: true)
+    :ok
   end
 
   defp wait_until(fun, timeout_ms) do
@@ -61,6 +87,29 @@ defmodule AmpSdk.CommandTest do
         Process.sleep(20)
         do_wait_until(fun, deadline)
       end
+    end
+  end
+
+  defp mailbox_messages do
+    case Process.info(self(), :messages) do
+      {:messages, messages} -> messages
+      _ -> []
+    end
+  end
+
+  defp flush_exec_messages do
+    receive do
+      {:stdout, _os_pid, _data} ->
+        flush_exec_messages()
+
+      {:stderr, _os_pid, _data} ->
+        flush_exec_messages()
+
+      {:DOWN, _os_pid, :process, _pid, _reason} ->
+        flush_exec_messages()
+    after
+      0 ->
+        :ok
     end
   end
 
@@ -159,6 +208,90 @@ defmodule AmpSdk.CommandTest do
         end
       )
     after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "run/2 timeout kills stubborn subprocesses and avoids erlexec mailbox noise" do
+    dir = TestSupport.tmp_dir!("amp_command_stubborn_timeout")
+    amp_path = write_stubborn_amp_stub!(dir)
+    pid_file = Path.join(dir, "amp_pid.txt")
+
+    try do
+      TestSupport.with_env(
+        %{
+          "AMP_CLI_PATH" => amp_path,
+          "AMP_TEST_PID_FILE" => pid_file
+        },
+        fn ->
+          flush_exec_messages()
+
+          assert {:error, %Error{kind: :command_timeout}} =
+                   Command.run(["threads", "list"], timeout: 20)
+
+          assert wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
+
+          pid =
+            pid_file
+            |> File.read!()
+            |> String.trim()
+            |> String.to_integer()
+
+          assert wait_until(fn -> not process_alive?(pid) end, 2_500) == :ok
+
+          Process.sleep(100)
+
+          assert mailbox_messages()
+                 |> Enum.any?(fn
+                   {:stdout, _os_pid, _data} -> true
+                   {:stderr, _os_pid, _data} -> true
+                   _ -> false
+                 end) == false
+        end
+      )
+    after
+      if File.exists?(pid_file) do
+        pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
+        kill_process(pid)
+      end
+
+      File.rm_rf(dir)
+    end
+  end
+
+  test "run/2 send_stdin failure force-stops stubborn subprocesses" do
+    dir = TestSupport.tmp_dir!("amp_command_stubborn_stdin")
+    amp_path = write_stubborn_amp_stub!(dir)
+    pid_file = Path.join(dir, "amp_pid.txt")
+
+    try do
+      TestSupport.with_env(
+        %{
+          "AMP_CLI_PATH" => amp_path,
+          "AMP_TEST_PID_FILE" => pid_file
+        },
+        fn ->
+          # 300 is not valid byte iodata, forcing send_stdin failure path.
+          assert {:error, %Error{kind: :command_execution_failed}} =
+                   Command.run(["threads", "list"], stdin: [300], timeout: 500)
+
+          assert wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
+
+          pid =
+            pid_file
+            |> File.read!()
+            |> String.trim()
+            |> String.to_integer()
+
+          assert wait_until(fn -> not process_alive?(pid) end, 2_500) == :ok
+        end
+      )
+    after
+      if File.exists?(pid_file) do
+        pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
+        kill_process(pid)
+      end
+
       File.rm_rf(dir)
     end
   end

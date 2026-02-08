@@ -1,12 +1,12 @@
 defmodule AmpSdk.Async do
   @moduledoc false
 
-  alias AmpSdk.TaskSupport
+  alias AmpSdk.{Error, TaskSupport}
 
   @type shutdown_fun :: (-> :ok)
 
   @spec run_with_timeout((-> term()), non_neg_integer() | :infinity) ::
-          {:ok, term()} | {:error, :timeout | {:task_exit, term()}}
+          {:ok, term()} | {:error, Error.t()}
   def run_with_timeout(fun, :infinity) when is_function(fun, 0) do
     {:ok, fun.()}
   end
@@ -28,42 +28,19 @@ defmodule AmpSdk.Async do
         result
 
       {:error, reason} ->
-        {:error, {:task_exit, {:task_start_failed, reason}}}
+        {:error, task_start_error(reason)}
     end
   end
 
   @spec start_task((-> any())) :: {:ok, pid(), shutdown_fun()} | {:error, term()}
   defp start_task(fun) do
-    case start_child(AmpSdk.TaskSupervisor, fun) do
-      {:ok, task_pid} ->
-        {:ok, task_pid, fn -> :ok end}
-
-      {:error, :noproc} ->
-        start_fallback_task(fun)
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp start_fallback_task(fun) do
-    case start_child(TaskSupport.fallback_supervisor(), fun) do
+    case TaskSupport.start_child(fun) do
       {:ok, task_pid} ->
         {:ok, task_pid, fn -> :ok end}
 
       {:error, reason} ->
         {:error, reason}
     end
-  end
-
-  defp start_child(supervisor, fun) do
-    Task.Supervisor.start_child(supervisor, fun)
-  catch
-    :exit, {:noproc, _} ->
-      {:error, :noproc}
-
-    :exit, reason ->
-      {:error, {:task_start_failed, reason}}
   end
 
   defp await_result(task_pid, monitor_ref, result_ref, timeout) do
@@ -73,7 +50,7 @@ defmodule AmpSdk.Async do
         {:ok, result}
 
       {:DOWN, ^monitor_ref, :process, ^task_pid, reason} ->
-        {:error, {:task_exit, reason}}
+        {:error, Error.normalize({:task_exit, reason}, kind: :task_exit)}
     after
       timeout ->
         Process.exit(task_pid, :kill)
@@ -86,8 +63,16 @@ defmodule AmpSdk.Async do
 
         flush_result_message(result_ref)
 
-        {:error, :timeout}
+        {:error,
+         Error.new(:task_timeout, "Task timed out after #{timeout}ms",
+           cause: :timeout,
+           context: %{timeout_ms: timeout}
+         )}
     end
+  end
+
+  defp task_start_error(reason) do
+    Error.new(:task_exit, "Task failed to start", cause: {:task_start_failed, reason})
   end
 
   defp flush_result_message(result_ref) do

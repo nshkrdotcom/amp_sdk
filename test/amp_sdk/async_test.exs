@@ -1,13 +1,15 @@
 defmodule AmpSdk.AsyncTest do
   use ExUnit.Case, async: true
 
-  alias AmpSdk.Async
+  alias AmpSdk.{Async, Error}
   import ExUnit.CaptureLog
 
   test "run_with_timeout/2 does not crash caller on worker exit" do
     log =
       capture_log(fn ->
-        assert {:error, {:task_exit, :boom}} = Async.run_with_timeout(fn -> exit(:boom) end, 200)
+        assert {:error, %Error{} = error} = Async.run_with_timeout(fn -> exit(:boom) end, 200)
+        assert error.kind == :task_exit
+        assert error.message == "Task exited: :boom"
       end)
 
     assert log =~ "Task"
@@ -20,7 +22,8 @@ defmodule AmpSdk.AsyncTest do
     flush_async_results()
 
     for _ <- 1..100 do
-      assert {:error, :timeout} = Async.run_with_timeout(fn -> Process.sleep(20) end, 0)
+      assert {:error, %Error{kind: :task_timeout}} =
+               Async.run_with_timeout(fn -> Process.sleep(20) end, 0)
     end
 
     Process.sleep(10)
