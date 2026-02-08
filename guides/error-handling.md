@@ -44,6 +44,8 @@ At the low-level transport boundary (`AmpSdk.Transport.Erlexec`), errors are ret
 Normalize these when you need the unified envelope:
 
 ```elixir
+error = AmpSdk.Transport.error_to_error({:transport, :timeout})
+# or:
 error = AmpSdk.Error.normalize({:transport, :timeout}, kind: :transport_error)
 ```
 

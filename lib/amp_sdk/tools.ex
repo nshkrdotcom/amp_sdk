@@ -1,7 +1,7 @@
 defmodule AmpSdk.Tools do
   @moduledoc "Tool management via the Amp CLI."
 
-  alias AmpSdk.{CLIInvoke, Error}
+  alias AmpSdk.{CLIInvoke, Error, Util}
 
   @spec list() :: {:ok, String.t()} | {:error, Error.t()}
   def list do
@@ -30,7 +30,7 @@ defmodule AmpSdk.Tools do
     run_opts =
       opts
       |> Keyword.take([:timeout])
-      |> maybe_put_stdin(Keyword.get(opts, :input))
+      |> Util.maybe_put_kw(:stdin, Keyword.get(opts, :input))
 
     CLIInvoke.invoke(args, run_opts)
   end
@@ -39,7 +39,4 @@ defmodule AmpSdk.Tools do
   def make(tool_name) when is_binary(tool_name) do
     CLIInvoke.invoke(["tools", "make", tool_name])
   end
-
-  defp maybe_put_stdin(run_opts, nil), do: run_opts
-  defp maybe_put_stdin(run_opts, input), do: Keyword.put(run_opts, :stdin, input)
 end

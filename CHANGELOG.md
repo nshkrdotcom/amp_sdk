@@ -47,3 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Async timeout/task-exit paths now return `%AmpSdk.Error{}` (`:task_timeout`, `:task_exit`) consistently.
 - Shared defaults/messages and a shared wrapper invocation helper were added to remove duplicated timeout constants and CLI invocation glue.
 - Warning cleanup and docs/examples synchronization with current CLI behavior.
+- Transport `safe_call/3` now isolates `GenServer.call/3` in a monitored helper process so timeout/error handling is contained and deterministic.
+- Headless `AmpSdk.Transport.Erlexec` instances now support idle auto-shutdown (`:headless_timeout_ms`, default `5_000`) to avoid orphaned subprocesses when no subscriber is attached.
+- Exit finalization now drains stdout in bounded batches instead of unbounded single-callback loops.
+- Config option reading now uses `fetch_option/3` conflict detection and raises `%AmpSdk.Error{kind: :invalid_configuration}` on atom/string key conflicts.
+- Low-level transport errors can now be normalized with `AmpSdk.Transport.error_to_error/2`.
+- Timeout defaults are now centralized in the internal defaults module and reused by review/stream/transport paths.

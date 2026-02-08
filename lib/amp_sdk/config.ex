@@ -9,7 +9,13 @@ defmodule AmpSdk.Config do
 
   @spec read_option(map(), atom(), term()) :: term()
   def read_option(opts, key, default \\ nil) when is_map(opts) and is_atom(key) do
-    Map.get(opts, key, Map.get(opts, Atom.to_string(key), default))
+    case fetch_option(opts, key, default) do
+      {:ok, value} ->
+        value
+
+      {:error, %Error{} = error} ->
+        raise error
+    end
   end
 
   @spec fetch_option(map(), atom(), term()) :: {:ok, term()} | {:error, Error.t()}

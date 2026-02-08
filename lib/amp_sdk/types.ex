@@ -527,6 +527,8 @@ defmodule AmpSdk.Types do
 
   defmodule Options do
     @moduledoc "Configuration options for an Amp CLI session."
+    @stream_timeout_ms AmpSdk.Defaults.stream_timeout_ms()
+
     @type t :: %__MODULE__{
             cwd: String.t() | nil,
             mode: String.t(),
@@ -564,7 +566,7 @@ defmodule AmpSdk.Types do
               permissions: nil,
               labels: nil,
               thinking: false,
-              stream_timeout_ms: 300_000,
+              stream_timeout_ms: @stream_timeout_ms,
               no_ide: false,
               no_notifications: false,
               no_color: false,

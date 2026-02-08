@@ -1,7 +1,7 @@
 defmodule AmpSdk.CLIInvoke do
   @moduledoc false
 
-  alias AmpSdk.{CommandRunner, Error}
+  alias AmpSdk.{CommandRunner, Error, Util}
 
   @type invoke_opt ::
           {:timeout, non_neg_integer() | :infinity}
@@ -15,7 +15,7 @@ defmodule AmpSdk.CLIInvoke do
     run_opts =
       opts
       |> Keyword.take([:timeout])
-      |> maybe_put(:stdin, Keyword.get(opts, :stdin))
+      |> Util.maybe_put_kw(:stdin, Keyword.get(opts, :stdin))
 
     case Keyword.get(opts, :default_timeout_ms) do
       timeout when is_integer(timeout) and timeout > 0 ->
@@ -25,7 +25,4 @@ defmodule AmpSdk.CLIInvoke do
         CommandRunner.run(args, run_opts)
     end
   end
-
-  defp maybe_put(opts, _key, nil), do: opts
-  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 end

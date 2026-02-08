@@ -5,13 +5,16 @@ defmodule AmpSdk.Transport.Erlexec do
 
   import Kernel, except: [send: 2]
 
-  alias AmpSdk.{Exec, TaskSupport}
+  alias AmpSdk.{Defaults, Exec, TaskSupport}
 
   @behaviour AmpSdk.Transport
 
   @default_max_buffer_size 1_048_576
   @default_max_stderr_buffer_size 262_144
-  @default_call_timeout 5_000
+  @default_call_timeout Defaults.transport_call_timeout_ms()
+  @force_close_timeout Defaults.transport_force_close_timeout_ms()
+  @default_headless_timeout_ms Defaults.transport_headless_timeout_ms()
+  @finalize_delay_ms 25
   @max_lines_per_batch 200
 
   defstruct subprocess: nil,
@@ -26,6 +29,8 @@ defmodule AmpSdk.Transport.Erlexec do
             overflowed?: false,
             pending_calls: %{},
             finalize_timer_ref: nil,
+            headless_timeout_ms: @default_headless_timeout_ms,
+            headless_timer_ref: nil,
             task_supervisor: AmpSdk.TaskSupervisor
 
   @type subscriber_info :: %{monitor_ref: reference(), tag: AmpSdk.Transport.subscription_tag()}
@@ -72,7 +77,7 @@ defmodule AmpSdk.Transport.Erlexec do
 
   @impl AmpSdk.Transport
   def force_close(transport) when is_pid(transport) do
-    case safe_call(transport, :force_close, 500) do
+    case safe_call(transport, :force_close, @force_close_timeout) do
       {:ok, :ok} ->
         :ok
 
@@ -117,21 +122,20 @@ defmodule AmpSdk.Transport.Erlexec do
     env = Keyword.get(opts, :env, [])
     task_supervisor = Keyword.get(opts, :task_supervisor, AmpSdk.TaskSupervisor)
     subscriber = Keyword.get(opts, :subscriber)
+    headless_timeout_ms = Keyword.get(opts, :headless_timeout_ms, @default_headless_timeout_ms)
 
     with {:ok, state} <-
            start_subprocess(
              command,
              args,
-             cwd,
-             env,
-             subscriber,
-             task_supervisor,
-             Keyword.get(opts, :max_buffer_size, @default_max_buffer_size),
-             Keyword.get(
-               opts,
-               :max_stderr_buffer_size,
-               @default_max_stderr_buffer_size
-             )
+             cwd: cwd,
+             env: env,
+             subscriber: subscriber,
+             headless_timeout_ms: headless_timeout_ms,
+             task_supervisor: task_supervisor,
+             max_buffer_size: Keyword.get(opts, :max_buffer_size, @default_max_buffer_size),
+             max_stderr_buffer_size:
+               Keyword.get(opts, :max_stderr_buffer_size, @default_max_stderr_buffer_size)
            ) do
       {:ok, state}
     else
@@ -141,7 +145,12 @@ defmodule AmpSdk.Transport.Erlexec do
 
   @impl GenServer
   def handle_call({:subscribe, pid, tag}, _from, state) do
-    {:reply, :ok, put_subscriber(state, pid, tag)}
+    state =
+      state
+      |> put_subscriber(pid, tag)
+      |> cancel_headless_timer()
+
+    {:reply, :ok, state}
   end
 
   def handle_call({:send, message}, from, %{subprocess: {pid, _}} = state) do
@@ -221,20 +230,33 @@ defmodule AmpSdk.Transport.Erlexec do
 
   def handle_info({:DOWN, os_pid, :process, pid, reason}, %{subprocess: {pid, os_pid}} = state) do
     state = cancel_finalize_timer(state)
-    timer_ref = Process.send_after(self(), {:finalize_exit, os_pid, pid, reason}, 25)
+
+    timer_ref =
+      Process.send_after(self(), {:finalize_exit, os_pid, pid, reason}, @finalize_delay_ms)
+
     {:noreply, %{state | finalize_timer_ref: timer_ref}}
   end
 
   def handle_info({:finalize_exit, os_pid, pid, reason}, %{subprocess: {pid, os_pid}} = state) do
-    state = %{state | finalize_timer_ref: nil}
-    state = flush_stdout_buffer(state)
+    state =
+      state
+      |> Map.put(:finalize_timer_ref, nil)
+      |> Map.put(:drain_scheduled?, false)
+      |> drain_stdout_lines(@max_lines_per_batch)
 
-    if state.stderr_buffer != "" do
-      send_event(state.subscribers, {:stderr, state.stderr_buffer})
+    if :queue.is_empty(state.pending_lines) do
+      state = flush_stdout_fragment(state)
+
+      if state.stderr_buffer != "" do
+        send_event(state.subscribers, {:stderr, state.stderr_buffer})
+      end
+
+      send_event(state.subscribers, {:exit, reason})
+      {:stop, :normal, %{state | status: :disconnected, subprocess: nil}}
+    else
+      Kernel.send(self(), {:finalize_exit, os_pid, pid, reason})
+      {:noreply, state}
     end
-
-    send_event(state.subscribers, {:exit, reason})
-    {:stop, :normal, %{state | status: :disconnected, subprocess: nil}}
   end
 
   def handle_info({:DOWN, ref, :process, pid, reason}, %{pending_calls: pending_calls} = state)
@@ -259,11 +281,25 @@ defmodule AmpSdk.Transport.Erlexec do
     {:noreply, state}
   end
 
+  def handle_info(:headless_timeout, state) do
+    state = %{state | headless_timer_ref: nil}
+
+    if map_size(state.subscribers) == 0 and not is_nil(state.subprocess) do
+      {:stop, :normal, state}
+    else
+      {:noreply, state}
+    end
+  end
+
   def handle_info(_other, state), do: {:noreply, state}
 
   @impl GenServer
   def terminate(_reason, state) do
-    state = cancel_finalize_timer(state)
+    state =
+      state
+      |> cancel_finalize_timer()
+      |> cancel_headless_timer()
+
     demonitor_subscribers(state.subscribers)
     cleanup_pending_calls(state.pending_calls)
     _ = force_stop_subprocess(state)
@@ -272,11 +308,74 @@ defmodule AmpSdk.Transport.Erlexec do
     _, _ -> :ok
   end
 
-  defp safe_call(transport, message, timeout \\ @default_call_timeout) do
-    {:ok, GenServer.call(transport, message, timeout)}
-  catch
-    :exit, reason ->
-      {:error, normalize_call_exit(reason)}
+  defp safe_call(transport, message, timeout \\ @default_call_timeout)
+
+  defp safe_call(transport, message, timeout)
+       when is_pid(transport) and is_integer(timeout) and timeout >= 0 do
+    parent = self()
+    call_ref = make_ref()
+
+    {call_pid, mon_ref} =
+      spawn_monitor(fn ->
+        result =
+          try do
+            {:ok, GenServer.call(transport, message, :infinity)}
+          catch
+            :exit, reason -> {:error, normalize_call_exit(reason)}
+          end
+
+        Kernel.send(parent, {:amp_sdk_transport_call, call_ref, result})
+      end)
+
+    await_safe_call(call_ref, mon_ref, call_pid, timeout)
+  end
+
+  defp await_safe_call(call_ref, mon_ref, call_pid, timeout) do
+    receive do
+      {:amp_sdk_transport_call, ^call_ref, result} ->
+        Process.demonitor(mon_ref, [:flush])
+        result
+
+      {:DOWN, ^mon_ref, :process, ^call_pid, reason} ->
+        consume_safe_call_result(call_ref, reason)
+    after
+      timeout ->
+        Process.exit(call_pid, :kill)
+        await_safe_call_down(mon_ref, call_pid)
+        flush_safe_call_result(call_ref)
+        {:error, :timeout}
+    end
+  end
+
+  defp consume_safe_call_result(call_ref, reason) do
+    receive do
+      {:amp_sdk_transport_call, ^call_ref, result} ->
+        result
+    after
+      0 ->
+        {:error, normalize_call_exit(reason)}
+    end
+  end
+
+  defp await_safe_call_down(mon_ref, call_pid) do
+    receive do
+      {:DOWN, ^mon_ref, :process, ^call_pid, _reason} ->
+        :ok
+    after
+      0 ->
+        Process.demonitor(mon_ref, [:flush])
+        :ok
+    end
+  end
+
+  defp flush_safe_call_result(call_ref) do
+    receive do
+      {:amp_sdk_transport_call, ^call_ref, _result} ->
+        :ok
+    after
+      0 ->
+        :ok
+    end
   end
 
   defp normalize_call_exit({:noproc, _}), do: :not_connected
@@ -295,19 +394,21 @@ defmodule AmpSdk.Transport.Erlexec do
 
   defp add_bootstrap_subscriber(_state, _subscriber), do: {:error, :invalid_subscriber}
 
-  defp start_subprocess(
-         command,
-         args,
-         cwd,
-         env,
-         subscriber,
-         task_supervisor,
-         max_buffer_size,
-         max_stderr_buffer_size
-       ) do
+  defp start_subprocess(command, args, opts) when is_list(opts) do
+    cwd = Keyword.get(opts, :cwd)
+    env = Keyword.get(opts, :env, [])
+    subscriber = Keyword.get(opts, :subscriber)
+    headless_timeout_ms = Keyword.get(opts, :headless_timeout_ms, @default_headless_timeout_ms)
+    task_supervisor = Keyword.get(opts, :task_supervisor, AmpSdk.TaskSupervisor)
+    max_buffer_size = Keyword.get(opts, :max_buffer_size, @default_max_buffer_size)
+
+    max_stderr_buffer_size =
+      Keyword.get(opts, :max_stderr_buffer_size, @default_max_stderr_buffer_size)
+
     state = %__MODULE__{
       max_buffer_size: max_buffer_size,
       max_stderr_buffer_size: max_stderr_buffer_size,
+      headless_timeout_ms: headless_timeout_ms,
       task_supervisor: task_supervisor
     }
 
@@ -320,8 +421,14 @@ defmodule AmpSdk.Transport.Erlexec do
 
     case :exec.run(cmd, exec_opts) do
       {:ok, pid, os_pid} ->
-        state = %{state | subprocess: {pid, os_pid}, status: :connected}
-        add_bootstrap_subscriber(state, subscriber)
+        state =
+          state
+          |> Map.put(:subprocess, {pid, os_pid})
+          |> Map.put(:status, :connected)
+
+        with {:ok, state} <- add_bootstrap_subscriber(state, subscriber) do
+          {:ok, maybe_schedule_headless_timer(state)}
+        end
 
       {:error, reason} ->
         {:error, reason}
@@ -355,6 +462,39 @@ defmodule AmpSdk.Transport.Erlexec do
       {:stop, :normal, state}
     else
       {:noreply, state}
+    end
+  end
+
+  defp maybe_schedule_headless_timer(%{headless_timer_ref: ref} = state) when not is_nil(ref),
+    do: state
+
+  defp maybe_schedule_headless_timer(%{subscribers: subscribers} = state)
+       when map_size(subscribers) > 0,
+       do: state
+
+  defp maybe_schedule_headless_timer(%{headless_timeout_ms: :infinity} = state), do: state
+
+  defp maybe_schedule_headless_timer(%{headless_timeout_ms: timeout_ms} = state)
+       when is_integer(timeout_ms) and timeout_ms > 0 do
+    timer_ref = Process.send_after(self(), :headless_timeout, timeout_ms)
+    %{state | headless_timer_ref: timer_ref}
+  end
+
+  defp maybe_schedule_headless_timer(state), do: state
+
+  defp cancel_headless_timer(%{headless_timer_ref: nil} = state), do: state
+
+  defp cancel_headless_timer(state) do
+    _ = Process.cancel_timer(state.headless_timer_ref, async: false, info: false)
+    flush_headless_timeout_message()
+    %{state | headless_timer_ref: nil}
+  end
+
+  defp flush_headless_timeout_message do
+    receive do
+      :headless_timeout -> :ok
+    after
+      0 -> :ok
     end
   end
 
@@ -457,24 +597,6 @@ defmodule AmpSdk.Transport.Erlexec do
     end
   end
 
-  defp drain_stdout_lines_all(state) do
-    case :queue.out(state.pending_lines) do
-      {:empty, _queue} ->
-        state
-
-      {{:value, line}, queue} ->
-        state = %{state | pending_lines: queue}
-
-        if byte_size(line) > state.max_buffer_size do
-          send_event(state.subscribers, {:error, {:buffer_overflow, byte_size(line)}})
-        else
-          send_event(state.subscribers, {:message, line})
-        end
-
-        drain_stdout_lines_all(state)
-    end
-  end
-
   defp maybe_schedule_drain(%{drain_scheduled?: true} = state), do: state
 
   defp maybe_schedule_drain(state) do
@@ -498,8 +620,7 @@ defmodule AmpSdk.Transport.Erlexec do
     end
   end
 
-  defp flush_stdout_buffer(state) do
-    state = drain_stdout_lines_all(state)
+  defp flush_stdout_fragment(state) do
     line = String.trim(state.stdout_buffer)
 
     cond do

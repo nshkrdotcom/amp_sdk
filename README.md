@@ -557,7 +557,7 @@ Streaming failures are surfaced inline as `ErrorResultMessage` structs:
 end)
 ```
 
-Low-level transport APIs (`AmpSdk.Transport.Erlexec`) return tagged tuples like `{:error, {:transport, reason}}`; use `AmpSdk.Error.normalize/2` when you want the unified envelope there as well.
+Low-level transport APIs (`AmpSdk.Transport.Erlexec`) return tagged tuples like `{:error, {:transport, reason}}`; use `AmpSdk.Transport.error_to_error/2` (or `AmpSdk.Error.normalize/2`) when you want the unified envelope there as well.
 
 ---
 

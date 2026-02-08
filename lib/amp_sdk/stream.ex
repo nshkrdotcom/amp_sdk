@@ -1,7 +1,7 @@
 defmodule AmpSdk.Stream do
   @moduledoc "Manages streaming execution of the Amp CLI."
 
-  alias AmpSdk.{CLI, Env, Error, Types}
+  alias AmpSdk.{CLI, Env, Error, Types, Util}
   alias AmpSdk.Transport.Erlexec
   alias AmpSdk.Types.Options
 
@@ -11,6 +11,7 @@ defmodule AmpSdk.Stream do
 
   defmodule State do
     @moduledoc false
+    @default_receive_timeout_ms AmpSdk.Defaults.stream_timeout_ms()
 
     @enforce_keys [:transport, :transport_ref, :receive_timeout_ms]
     defstruct transport: nil,
@@ -19,7 +20,7 @@ defmodule AmpSdk.Stream do
               received_result?: false,
               temp_dir: nil,
               stderr: "",
-              receive_timeout_ms: 300_000
+              receive_timeout_ms: @default_receive_timeout_ms
 
     @type t :: %__MODULE__{
             transport: pid(),
@@ -346,11 +347,11 @@ defmodule AmpSdk.Stream do
 
   defp add_simple_flags(args, options) do
     args
-    |> maybe_append(options.dangerously_allow_all, ["--dangerously-allow-all"])
-    |> maybe_append(options.visibility, ["--visibility", options.visibility])
-    |> maybe_append(options.log_level, ["--log-level", options.log_level])
-    |> maybe_append(options.log_file, ["--log-file", options.log_file])
-    |> maybe_append(options.mode, ["--mode", options.mode])
+    |> Util.maybe_append(options.dangerously_allow_all, ["--dangerously-allow-all"])
+    |> Util.maybe_append(options.visibility, ["--visibility", options.visibility])
+    |> Util.maybe_append(options.log_level, ["--log-level", options.log_level])
+    |> Util.maybe_append(options.log_file, ["--log-file", options.log_file])
+    |> Util.maybe_append(options.mode, ["--mode", options.mode])
   end
 
   defp add_mcp_config(args, %Options{mcp_config: nil}), do: args
@@ -367,15 +368,12 @@ defmodule AmpSdk.Stream do
     do: Enum.reduce(labels, args, fn label, acc -> acc ++ ["--label", label] end)
 
   defp add_boolean_flags(args, options) do
-    args = if options.no_ide, do: args ++ ["--no-ide"], else: args
-    args = if options.no_notifications, do: args ++ ["--no-notifications"], else: args
-    args = if options.no_color, do: args ++ ["--no-color"], else: args
-    if options.no_jetbrains, do: args ++ ["--no-jetbrains"], else: args
+    args
+    |> Util.maybe_flag(options.no_ide, "--no-ide")
+    |> Util.maybe_flag(options.no_notifications, "--no-notifications")
+    |> Util.maybe_flag(options.no_color, "--no-color")
+    |> Util.maybe_flag(options.no_jetbrains, "--no-jetbrains")
   end
-
-  defp maybe_append(args, nil, _extra), do: args
-  defp maybe_append(args, false, _extra), do: args
-  defp maybe_append(args, _truthy, extra), do: args ++ extra
 
   @doc false
   @spec build_settings_file(Options.t()) ::

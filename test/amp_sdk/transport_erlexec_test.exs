@@ -183,4 +183,50 @@ defmodule AmpSdk.Transport.ErlexecTest do
       end
     end
   end
+
+  test "headless transports auto-stop after idle timeout when no subscriber is attached" do
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "sleep 5"],
+        headless_timeout_ms: 50
+      )
+
+    monitor_ref = Process.monitor(transport)
+    assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 1_000
+  end
+
+  test "finalize exit draining remains responsive for status calls with large pending queues" do
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "sleep 30"]
+      )
+
+    monitor_ref = Process.monitor(transport)
+
+    try do
+      state = :sys.get_state(transport)
+      {pid, os_pid} = state.subprocess
+
+      pending_lines =
+        Enum.reduce(1..200_000, :queue.new(), fn _idx, queue ->
+          :queue.in("line", queue)
+        end)
+
+      :sys.replace_state(transport, fn current ->
+        %{current | pending_lines: pending_lines, stdout_buffer: "", drain_scheduled?: false}
+      end)
+
+      send(transport, {:finalize_exit, os_pid, pid, :normal})
+
+      assert :connected = GenServer.call(transport, :status, 20)
+      assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 5_000
+    after
+      if Process.alive?(transport) do
+        _ = Erlexec.force_close(transport)
+        assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 1_500
+      end
+    end
+  end
 end

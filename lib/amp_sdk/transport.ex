@@ -1,6 +1,8 @@
 defmodule AmpSdk.Transport do
   @moduledoc "Behaviour for CLI transport implementations."
 
+  alias AmpSdk.Error
+
   @type t :: pid()
   @type message :: binary()
   @type opts :: keyword()
@@ -15,4 +17,12 @@ defmodule AmpSdk.Transport do
   @callback force_close(t()) :: :ok | {:error, term()}
   @callback status(t()) :: :connected | :disconnected | :error
   @callback end_input(t()) :: :ok | {:error, term()}
+
+  @doc """
+  Normalizes low-level transport reasons into the unified `%AmpSdk.Error{}` envelope.
+  """
+  @spec error_to_error(term(), keyword()) :: Error.t()
+  def error_to_error(reason, opts \\ []) do
+    Error.normalize(reason, Keyword.put_new(opts, :kind, :transport_error))
+  end
 end

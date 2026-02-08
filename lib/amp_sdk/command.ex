@@ -1,7 +1,7 @@
 defmodule AmpSdk.Command do
   @moduledoc false
 
-  alias AmpSdk.{CLI, Defaults, Env, Error, Exec}
+  alias AmpSdk.{CLI, Defaults, Env, Error, Exec, Util}
   alias AmpSdk.CLI.CommandSpec
 
   @stop_wait_ms 200
@@ -30,8 +30,8 @@ defmodule AmpSdk.Command do
 
     cmd_opts =
       [stderr_to_stdout: Keyword.get(opts, :stderr_to_stdout, true)]
-      |> maybe_put(:cd, Keyword.get(opts, :cd))
-      |> maybe_put(:env, normalize_env(Keyword.get(opts, :env)))
+      |> Util.maybe_put_kw(:cd, Keyword.get(opts, :cd))
+      |> Util.maybe_put_kw(:env, normalize_env(Keyword.get(opts, :env)))
 
     command_args = CLI.command_args(command, args)
 
@@ -326,9 +326,6 @@ defmodule AmpSdk.Command do
 
   defp maybe_trim(output, true), do: String.trim(output)
   defp maybe_trim(output, _), do: output
-
-  defp maybe_put(opts, _key, nil), do: opts
-  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
 
   defp normalize_env(nil), do: %{}
   defp normalize_env(env) when is_map(env) or is_list(env), do: Env.normalize_overrides(env)
