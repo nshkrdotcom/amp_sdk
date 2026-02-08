@@ -4,8 +4,15 @@
 IO.puts("=== Permissions ===\n")
 
 case AmpSdk.permissions_list() do
-  {:ok, output} -> IO.puts(output)
-  {:error, err} -> IO.puts("Error: #{inspect(err)}")
+  {:ok, rules} ->
+    IO.puts("Found #{length(rules)} rule(s)\n")
+
+    Enum.each(rules, fn rule ->
+      IO.puts("#{rule.action} #{rule.tool}")
+    end)
+
+  {:error, err} ->
+    IO.puts("Error: #{inspect(err)}")
 end
 
 System.halt(0)

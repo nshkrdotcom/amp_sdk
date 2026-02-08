@@ -20,11 +20,8 @@ IO.puts("\nAdding Read allow rule:")
 
 already_allowed? =
   case AmpSdk.permissions_list() do
-    {:ok, output} ->
-      output
-      |> String.split("\n", trim: true)
-      |> Enum.map(&String.trim/1)
-      |> Enum.any?(&(&1 == "allow Read"))
+    {:ok, rules} ->
+      Enum.any?(rules, &(&1.action == "allow" and &1.tool == "Read"))
 
     {:error, _err} ->
       false

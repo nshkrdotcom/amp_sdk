@@ -88,8 +88,9 @@ defmodule AmpSdk.LiveTest do
 
     @tag timeout: 30_000
     test "lists threads" do
-      assert {:ok, output} = AmpSdk.threads_list()
-      assert is_binary(output)
+      assert {:ok, threads} = AmpSdk.threads_list()
+      assert is_list(threads)
+      assert Enum.all?(threads, &match?(%AmpSdk.Types.ThreadSummary{}, &1))
     end
   end
 

@@ -2,8 +2,10 @@ defmodule AmpSdk.Threads do
   @moduledoc "Thread management via the Amp CLI."
 
   alias AmpSdk.{CLIInvoke, Error, Util}
+  alias AmpSdk.Types.ThreadSummary
 
   @type visibility :: :private | :public | :workspace | :group
+  @thread_row_regex ~r/^(?<title>.*?)\s{2,}(?<last_updated>.*?)\s{2,}(?<visibility>[A-Za-z]+)\s{2,}(?<messages>\d+)\s{2,}(?<id>T-[A-Za-z0-9-]+)\s*$/
 
   @spec new(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
   def new(opts \\ []) do
@@ -20,9 +22,16 @@ defmodule AmpSdk.Threads do
     CLIInvoke.invoke(["threads", "markdown", thread_id])
   end
 
-  @spec list() :: {:ok, String.t()} | {:error, Error.t()}
-  def list do
-    CLIInvoke.invoke(["threads", "list"])
+  @spec list(keyword()) :: {:ok, [ThreadSummary.t()]} | {:error, Error.t()}
+  def list(opts \\ []) when is_list(opts) do
+    with {:ok, output} <- CLIInvoke.invoke(["threads", "list"], opts) do
+      parse_list_output(output)
+    end
+  end
+
+  @spec list_raw(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
+  def list_raw(opts \\ []) when is_list(opts) do
+    CLIInvoke.invoke(["threads", "list"], opts)
   end
 
   @spec search(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
@@ -124,4 +133,107 @@ defmodule AmpSdk.Threads do
   end
 
   defp maybe_wrap_replay_error(result, _thread_id), do: result
+
+  defp parse_list_output(output) do
+    lines =
+      output
+      |> String.split("\n", trim: true)
+      |> Enum.map(&String.trim_trailing/1)
+      |> Enum.reject(&(&1 == ""))
+
+    cond do
+      lines == [] ->
+        {:ok, []}
+
+      no_records_line?(hd(lines)) ->
+        {:ok, []}
+
+      true ->
+        lines
+        |> drop_table_header()
+        |> Enum.reject(&separator_line?/1)
+        |> parse_rows(output)
+    end
+  end
+
+  defp parse_rows([], _raw_output), do: {:ok, []}
+
+  defp parse_rows(rows, raw_output) do
+    Enum.reduce_while(rows, {:ok, []}, fn row, {:ok, acc} ->
+      case parse_row(row) do
+        {:ok, parsed} ->
+          {:cont, {:ok, [parsed | acc]}}
+
+        {:error, %Error{} = error} ->
+          {:halt,
+           {:error,
+            Error.normalize(error,
+              kind: :parse_error,
+              details: raw_output,
+              context: Map.put(error.context, :row, row)
+            )}}
+      end
+    end)
+    |> case do
+      {:ok, parsed} -> {:ok, Enum.reverse(parsed)}
+      error -> error
+    end
+  end
+
+  defp parse_row(row) when is_binary(row) do
+    case Regex.named_captures(@thread_row_regex, row) do
+      %{
+        "id" => id,
+        "last_updated" => last_updated,
+        "messages" => messages,
+        "title" => title,
+        "visibility" => visibility
+      } ->
+        {:ok,
+         %ThreadSummary{
+           id: String.trim(id),
+           title: String.trim(title),
+           last_updated: String.trim(last_updated),
+           visibility: parse_visibility(visibility),
+           messages: String.to_integer(messages),
+           raw: row
+         }}
+
+      _ ->
+        {:error,
+         Error.new(:parse_error, "Failed to parse thread list output",
+           context: %{reason: :unmatched_row}
+         )}
+    end
+  end
+
+  defp drop_table_header([header, separator | rows]) do
+    if String.contains?(header, "Thread ID") and separator_line?(separator),
+      do: rows,
+      else: [header, separator | rows]
+  end
+
+  defp drop_table_header(rows), do: rows
+
+  defp separator_line?(line) when is_binary(line) do
+    stripped = line |> String.replace(" ", "")
+    stripped != "" and Regex.match?(~r/^[^[:alnum:]]+$/, stripped)
+  end
+
+  defp no_records_line?(line) when is_binary(line) do
+    line
+    |> String.trim()
+    |> String.downcase()
+    |> String.starts_with?("no ")
+  end
+
+  defp parse_visibility(visibility) when is_binary(visibility) do
+    case visibility |> String.trim() |> String.downcase() do
+      "private" -> :private
+      "public" -> :public
+      "workspace" -> :workspace
+      "group" -> :group
+      _ -> :unknown
+    end
+  end
 end

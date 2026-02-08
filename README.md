@@ -34,7 +34,7 @@ Add `amp_sdk` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:amp_sdk, "~> 0.1.0"}
+    {:amp_sdk, "~> 0.2.0"}
   ]
 end
 ```
@@ -217,6 +217,24 @@ Manage threads directly:
 ```elixir
 {:ok, thread_id} = AmpSdk.threads_new(visibility: :private)
 {:ok, markdown}   = AmpSdk.threads_markdown(thread_id)
+```
+
+### Typed Management List APIs
+
+Management list functions return typed data for programmatic use:
+
+```elixir
+{:ok, threads} = AmpSdk.threads_list()
+{:ok, rules} = AmpSdk.permissions_list()
+{:ok, servers} = AmpSdk.mcp_list()
+```
+
+If you need raw CLI text output, use:
+
+```elixir
+{:ok, thread_output} = AmpSdk.threads_list_raw()
+{:ok, permission_output} = AmpSdk.permissions_list_raw()
+{:ok, mcp_output} = AmpSdk.mcp_list_raw()
 ```
 
 ---
@@ -517,6 +535,9 @@ Execution failed or hit max turns.
 | `AmpSdk.CLI` | CLI binary discovery across multiple install methods |
 | `AmpSdk.Threads` | Thread lifecycle management wrappers over CLI commands |
 | `AmpSdk.Types` | All structs: messages, content blocks, options, permissions, MCP config |
+| `AmpSdk.Types.ThreadSummary` | Typed thread list entries from `threads_list/1` |
+| `AmpSdk.Types.PermissionRule` | Typed permission list entries from `permissions_list/1` |
+| `AmpSdk.Types.MCPServer` | Typed MCP list entries from `mcp_list/1` |
 | `AmpSdk.Error` | Unified error envelope used by tuple-based APIs |
 | `AmpSdk.Errors` | Legacy/specialized exception types: `AmpError`, `CLINotFoundError`, `ProcessError`, `JSONParseError` |
 

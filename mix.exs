@@ -1,7 +1,7 @@
 defmodule AmpSdk.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.2.0"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
 
   def project do
@@ -131,6 +131,9 @@ defmodule AmpSdk.MixProject do
           AmpSdk.Types.ThinkingContent,
           AmpSdk.Types.Usage,
           AmpSdk.Types.MCPServerStatus,
+          AmpSdk.Types.ThreadSummary,
+          AmpSdk.Types.PermissionRule,
+          AmpSdk.Types.MCPServer,
           AmpSdk.Types.MCPStdioServer,
           AmpSdk.Types.MCPHttpServer
         ],

@@ -82,7 +82,11 @@ Manage and test permission rules:
 
 ```elixir
 # List current rules
-{:ok, output} = AmpSdk.permissions_list()
+{:ok, rules} = AmpSdk.permissions_list()
+Enum.each(rules, fn rule -> IO.puts("#{rule.action} #{rule.tool}") end)
+
+# Raw CLI output if needed
+{:ok, output} = AmpSdk.permissions_list_raw()
 
 # Test if a tool would be allowed
 {:ok, result} = AmpSdk.permissions_test("Bash")
@@ -99,7 +103,11 @@ Manage Model Context Protocol servers:
 
 ```elixir
 # List configured servers
-{:ok, output} = AmpSdk.mcp_list()
+{:ok, servers} = AmpSdk.mcp_list()
+Enum.each(servers, fn server -> IO.puts("#{server.name} [#{server.type}]") end)
+
+# Raw CLI output if needed
+{:ok, output} = AmpSdk.mcp_list_raw()
 
 # Add a local command server in workspace settings
 {:ok, _} = AmpSdk.mcp_add("filesystem", ["npx", "-y", "@modelcontextprotocol/server-filesystem"],

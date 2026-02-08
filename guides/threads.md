@@ -35,7 +35,17 @@ AmpSdk.run("Continue this work", %Options{continue_thread: "T-abc123-def456"})
 ## Listing Threads
 
 ```elixir
-{:ok, output} = AmpSdk.threads_list()
+{:ok, threads} = AmpSdk.threads_list()
+
+Enum.each(threads, fn thread ->
+  IO.puts("#{thread.id} #{thread.visibility} #{thread.messages} #{thread.title}")
+end)
+```
+
+If you need raw plain-text CLI output, use:
+
+```elixir
+{:ok, output} = AmpSdk.threads_list_raw()
 IO.puts(output)
 ```
 
@@ -165,7 +175,8 @@ thread_id =
 | Function | Description |
 |---|---|
 | `threads_new/1` | Create a new thread (opts: `visibility`) |
-| `threads_list/0` | List all threads |
+| `threads_list/0` | List all threads as typed `%ThreadSummary{}` structs |
+| `threads_list_raw/0` | List all threads as raw CLI output |
 | `threads_search/2` | Search threads (opts: `limit`, `offset`, `json`) |
 | `threads_share/2` | Share a thread (opts: `visibility`, `support`) |
 | `threads_rename/2` | Rename a thread |

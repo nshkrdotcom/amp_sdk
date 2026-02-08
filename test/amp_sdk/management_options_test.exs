@@ -201,16 +201,19 @@ defmodule AmpSdk.ManagementOptionsTest do
     end)
   end
 
-  test "mcp_list forwards json flag" do
-    with_cli_stub(fn args_file, _stdin_file ->
-      assert {:ok, "ok"} = AmpSdk.mcp_list(json: true)
+  test "mcp_list requests json output for typed parsing" do
+    with_cli_stub(
+      fn args_file, _stdin_file ->
+        assert {:ok, []} = AmpSdk.mcp_list()
 
-      assert read_args!(args_file) == [
-               "mcp",
-               "list",
-               "--json"
-             ]
-    end)
+        assert read_args!(args_file) == [
+                 "mcp",
+                 "list",
+                 "--json"
+               ]
+      end,
+      %{"AMP_TEST_OUTPUT" => "[]"}
+    )
   end
 
   test "mcp_oauth_login forwards current OAuth CLI flags" do

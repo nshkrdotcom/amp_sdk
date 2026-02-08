@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-02-07
+
+### Added
+
+- Typed management models for list-style APIs:
+  - `AmpSdk.Types.ThreadSummary`
+  - `AmpSdk.Types.PermissionRule`
+  - `AmpSdk.Types.MCPServer`
+- Raw output accessors for callers that still need plain CLI output:
+  - `AmpSdk.threads_list_raw/1`
+  - `AmpSdk.permissions_list_raw/1`
+  - `AmpSdk.mcp_list_raw/1`
+
+### Changed
+
+- `threads_list/1` now returns `{:ok, [%AmpSdk.Types.ThreadSummary{}]}` instead of raw table text.
+- `permissions_list/1` now requests CLI JSON and returns typed `%AmpSdk.Types.PermissionRule{}` entries.
+- `mcp_list/1` now requests CLI JSON and returns typed `%AmpSdk.Types.MCPServer{}` entries.
+- `threads_list/1`, `permissions_list/1`, and `mcp_list/1` now accept keyword opts, with zero-arity wrappers preserved via defaults.
+- Documentation, guides, and examples now use typed list APIs as the primary path.
+
+### Fixed
+
+- Downstream consumers no longer need to call list functions and then parse/`length` raw CLI table strings for management data.
+
 ## [0.1.0] - 2025-02-07
 
 ### Added
