@@ -37,12 +37,24 @@ defmodule AmpSdk.Transport.Erlexec do
 
   @impl AmpSdk.Transport
   def start(opts) when is_list(opts) do
-    GenServer.start(__MODULE__, opts)
+    case GenServer.start(__MODULE__, opts) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, reason} -> transport_error(reason)
+    end
+  catch
+    :exit, reason ->
+      transport_error(reason)
   end
 
   @impl AmpSdk.Transport
   def start_link(opts) when is_list(opts) do
-    GenServer.start_link(__MODULE__, opts)
+    case GenServer.start_link(__MODULE__, opts) do
+      {:ok, pid} -> {:ok, pid}
+      {:error, reason} -> transport_error(reason)
+    end
+  catch
+    :exit, reason ->
+      transport_error(reason)
   end
 
   @impl AmpSdk.Transport
@@ -312,71 +324,32 @@ defmodule AmpSdk.Transport.Erlexec do
 
   defp safe_call(transport, message, timeout)
        when is_pid(transport) and is_integer(timeout) and timeout >= 0 do
-    parent = self()
-    call_ref = make_ref()
+    with {:ok, task} <-
+           TaskSupport.async_nolink(fn ->
+             try do
+               {:ok, GenServer.call(transport, message, :infinity)}
+             catch
+               :exit, reason -> {:error, normalize_call_exit(reason)}
+             end
+           end) do
+      case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
+        {:ok, result} ->
+          result
 
-    {call_pid, mon_ref} =
-      spawn_monitor(fn ->
-        result =
-          try do
-            {:ok, GenServer.call(transport, message, :infinity)}
-          catch
-            :exit, reason -> {:error, normalize_call_exit(reason)}
-          end
+        {:exit, reason} ->
+          {:error, normalize_call_exit(reason)}
 
-        Kernel.send(parent, {:amp_sdk_transport_call, call_ref, result})
-      end)
-
-    await_safe_call(call_ref, mon_ref, call_pid, timeout)
-  end
-
-  defp await_safe_call(call_ref, mon_ref, call_pid, timeout) do
-    receive do
-      {:amp_sdk_transport_call, ^call_ref, result} ->
-        Process.demonitor(mon_ref, [:flush])
-        result
-
-      {:DOWN, ^mon_ref, :process, ^call_pid, reason} ->
-        consume_safe_call_result(call_ref, reason)
-    after
-      timeout ->
-        Process.exit(call_pid, :kill)
-        await_safe_call_down(mon_ref, call_pid)
-        flush_safe_call_result(call_ref)
-        {:error, :timeout}
+        nil ->
+          {:error, :timeout}
+      end
+    else
+      {:error, reason} ->
+        {:error, normalize_call_task_start_error(reason)}
     end
   end
 
-  defp consume_safe_call_result(call_ref, reason) do
-    receive do
-      {:amp_sdk_transport_call, ^call_ref, result} ->
-        result
-    after
-      0 ->
-        {:error, normalize_call_exit(reason)}
-    end
-  end
-
-  defp await_safe_call_down(mon_ref, call_pid) do
-    receive do
-      {:DOWN, ^mon_ref, :process, ^call_pid, _reason} ->
-        :ok
-    after
-      0 ->
-        Process.demonitor(mon_ref, [:flush])
-        :ok
-    end
-  end
-
-  defp flush_safe_call_result(call_ref) do
-    receive do
-      {:amp_sdk_transport_call, ^call_ref, _result} ->
-        :ok
-    after
-      0 ->
-        :ok
-    end
-  end
+  defp normalize_call_task_start_error(:noproc), do: :transport_stopped
+  defp normalize_call_task_start_error(reason), do: {:call_exit, reason}
 
   defp normalize_call_exit({:noproc, _}), do: :not_connected
   defp normalize_call_exit(:noproc), do: :not_connected

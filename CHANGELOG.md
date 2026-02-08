@@ -33,8 +33,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test coverage:
   - 177 tests total (including live tests tagged `:live`, excluded by default)
 
+### Changed
+
+- Internal process `:DOWN` waiting logic is now shared through a common helper module to reduce duplicated monitor wait code across async/command/stream paths.
+
 ### Fixed
 
+- Stream cleanup now drains pending `{:amp_sdk_transport, ref, event}` messages for the finished stream reference, preventing mailbox residue in long-lived caller processes.
+- Command collection now flushes trailing erlexec `stdout`/`stderr`/`DOWN` messages on the normal `:DOWN` completion path (not only timeout/stop paths).
+- `AmpSdk.Transport.Erlexec` safe-call path now runs through supervised tasks (`AmpSdk.TaskSupervisor`) instead of unsupervised per-call `spawn_monitor` helpers.
+- CLI Node.js package resolution fallback (`require.resolve`) is now bounded by a probe timeout (`2_000ms`) to avoid indefinite `CLI.resolve/0` hangs.
+- `AmpSdk.Transport.Erlexec` startup (`start` / `start_link`) now returns consistent tagged transport errors (`{:error, {:transport, reason}}`) on startup/init failures.
+- Config/env normalization now drops `nil` entries for string maps, CLI env overrides, and MCP `env`/`headers` constructors instead of coercing them into empty-string values.
 - `permissions add` argument order corrected to CLI format: `<action> <tool>`.
 - `permissions_add/3` wrapper support added for `--to` and `--workspace`.
 - `tools_use/2` no longer forces `stdin: nil` (prevents headless hangs/timeouts when no input is provided).

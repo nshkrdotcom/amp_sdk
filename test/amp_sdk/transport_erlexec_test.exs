@@ -1,6 +1,7 @@
 defmodule AmpSdk.Transport.ErlexecTest do
   use ExUnit.Case, async: false
 
+  alias AmpSdk.TestSupport
   alias AmpSdk.Transport.Erlexec
 
   defp sh_path do
@@ -20,6 +21,22 @@ defmodule AmpSdk.Transport.ErlexecTest do
     assert_receive {:amp_sdk_transport, ^ref, {:message, "hello"}}, 1_000
     assert_receive {:amp_sdk_transport, ^ref, {:message, "world"}}, 1_000
     assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
+  end
+
+  test "start/1 wraps init failures as tagged transport errors" do
+    assert {:error, {:transport, _reason}} =
+             Erlexec.start(command: "sh", args: ["-c", "echo ok"], subscriber: :bad)
+  end
+
+  test "start_link/1 wraps init failures as tagged transport errors" do
+    previous = Process.flag(:trap_exit, true)
+
+    try do
+      assert {:error, {:transport, _reason}} =
+               Erlexec.start_link(command: "sh", args: ["-c", "echo ok"], subscriber: :bad)
+    after
+      Process.flag(:trap_exit, previous)
+    end
   end
 
   test "flushes partial line on process exit" do
@@ -89,7 +106,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
     {:ok, transport} =
       Erlexec.start(
         command: sh_path(),
-        args: ["-c", "sleep 0.2"]
+        args: ["-c", "cat"]
       )
 
     try do
@@ -99,6 +116,40 @@ defmodule AmpSdk.Transport.ErlexecTest do
       assert Map.get(state, :io_supervisor) in [nil, AmpSdk.TaskSupervisor]
     after
       Erlexec.close(transport)
+    end
+  end
+
+  test "safe_call uses the shared task supervisor for blocked client calls" do
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "cat"]
+      )
+
+    try do
+      baseline_active = DynamicSupervisor.count_children(AmpSdk.TaskSupervisor).active
+      :ok = :sys.suspend(transport)
+      parent = self()
+
+      caller =
+        spawn(fn ->
+          send(parent, {:status_result, Erlexec.status(transport)})
+        end)
+
+      assert TestSupport.wait_until(
+               fn ->
+                 DynamicSupervisor.count_children(AmpSdk.TaskSupervisor).active > baseline_active
+               end,
+               500
+             ) == :ok
+
+      :ok = :sys.resume(transport)
+      assert_receive {:status_result, :connected}, 1_000
+      refute Process.alive?(caller)
+    after
+      if Process.alive?(transport) do
+        _ = Erlexec.force_close(transport)
+      end
     end
   end
 
@@ -120,7 +171,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
     {:ok, transport} =
       Erlexec.start(
         command: sh_path(),
-        args: ["-c", "sleep 2"]
+        args: ["-c", "cat"]
       )
 
     monitor_ref = Process.monitor(transport)
@@ -128,7 +179,12 @@ defmodule AmpSdk.Transport.ErlexecTest do
     subscriber =
       spawn(fn ->
         :ok = Erlexec.subscribe(transport, self(), make_ref())
-        :timer.sleep(50)
+
+        receive do
+        after
+          50 ->
+            :ok
+        end
       end)
 
     Process.monitor(subscriber)
@@ -161,7 +217,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
     {:ok, transport} =
       Erlexec.start(
         command: sh_path(),
-        args: ["-c", "sleep 5"]
+        args: ["-c", "cat"]
       )
 
     monitor_ref = Process.monitor(transport)
@@ -188,7 +244,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
     {:ok, transport} =
       Erlexec.start(
         command: sh_path(),
-        args: ["-c", "sleep 5"],
+        args: ["-c", "cat"],
         headless_timeout_ms: 50
       )
 
@@ -200,7 +256,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
     {:ok, transport} =
       Erlexec.start(
         command: sh_path(),
-        args: ["-c", "sleep 30"]
+        args: ["-c", "cat"]
       )
 
     monitor_ref = Process.monitor(transport)

@@ -1,7 +1,7 @@
 defmodule AmpSdk.Threads do
   @moduledoc "Thread management via the Amp CLI."
 
-  alias AmpSdk.{CLIInvoke, Error}
+  alias AmpSdk.{CLIInvoke, Error, Util}
 
   @type visibility :: :private | :public | :workspace | :group
 
@@ -68,13 +68,60 @@ defmodule AmpSdk.Threads do
     CLIInvoke.invoke(["threads", "delete", thread_id])
   end
 
-  @spec handoff(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
-  def handoff(thread_id) when is_binary(thread_id) do
-    CLIInvoke.invoke(["threads", "handoff", thread_id])
+  @spec handoff(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
+  def handoff(thread_id, opts \\ []) when is_binary(thread_id) and is_list(opts) do
+    args = ["threads", "handoff", thread_id]
+    args = if opts[:goal], do: args ++ ["--goal", opts[:goal]], else: args
+    args = if opts[:print], do: args ++ ["--print"], else: args
+
+    run_opts =
+      opts
+      |> Keyword.take([:timeout, :stdin])
+      |> Util.maybe_put_kw(:stdin, Keyword.get(opts, :input))
+
+    CLIInvoke.invoke(args, run_opts)
   end
 
-  @spec replay(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
-  def replay(thread_id) when is_binary(thread_id) do
-    CLIInvoke.invoke(["threads", "replay", thread_id])
+  @spec replay(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
+  def replay(thread_id, opts \\ []) when is_binary(thread_id) and is_list(opts) do
+    args =
+      ["threads", "replay", thread_id]
+      |> Util.maybe_append(opts[:wpm], ["--wpm", to_string(opts[:wpm] || "")])
+      |> Util.maybe_append(opts[:no_typing], ["--no-typing"])
+      |> Util.maybe_append(opts[:message_delay], [
+        "--message-delay",
+        to_string(opts[:message_delay] || "")
+      ])
+      |> Util.maybe_append(opts[:tool_progress_delay], [
+        "--tool-progress-delay",
+        to_string(opts[:tool_progress_delay] || "")
+      ])
+      |> Util.maybe_append(opts[:exit_delay], ["--exit-delay", to_string(opts[:exit_delay] || "")])
+      |> Util.maybe_append(opts[:no_indicator], ["--no-indicator"])
+
+    args
+    |> CLIInvoke.invoke(opts)
+    |> maybe_wrap_replay_error(thread_id)
   end
+
+  defp maybe_wrap_replay_error(
+         {:error, %Error{kind: :command_failed, details: details} = error},
+         thread_id
+       ) do
+    details = to_string(details || "")
+
+    if String.contains?(details, "Unexpected error inside Amp CLI.") do
+      {:error,
+       Error.new(
+         :command_execution_failed,
+         "threads replay requires an interactive terminal; run `amp threads replay #{thread_id}` directly",
+         cause: error,
+         details: details
+       )}
+    else
+      {:error, error}
+    end
+  end
+
+  defp maybe_wrap_replay_error(result, _thread_id), do: result
 end

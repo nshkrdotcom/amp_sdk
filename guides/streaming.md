@@ -8,6 +8,8 @@ The Amp SDK uses a streaming architecture to deliver messages in real time as th
 
 The stream consumer uses selective receive for transport-tagged messages only. This means unrelated mailbox messages in the caller process are preserved, so `execute/2` can be used safely from OTP processes that also handle other messages.
 
+When a stream finishes (result, timeout, parse error, or transport error), cleanup drains remaining transport-tagged events for that stream reference. This avoids leaving stale `{:amp_sdk_transport, ref, event}` messages in long-lived caller mailboxes.
+
 `execute/2` accepts either:
 - a string prompt (`--stream-json` / `--stream-json-thinking`)
 - a list of `UserInputMessage` values (`--stream-json-input`)

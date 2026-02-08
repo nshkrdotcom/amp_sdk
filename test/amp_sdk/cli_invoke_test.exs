@@ -8,9 +8,8 @@ defmodule AmpSdk.CLIInvokeTest do
     #!/usr/bin/env bash
     set -euo pipefail
 
-    sleep_sec="${AMP_TEST_SLEEP_SEC:-0}"
-    if [ "$sleep_sec" != "0" ]; then
-      sleep "$sleep_sec"
+    if [ "${AMP_TEST_BLOCK_FOREVER:-0}" = "1" ]; then
+      tail -f /dev/null
     fi
 
     if [ -n "${AMP_TEST_STDIN_FILE:-}" ]; then
@@ -37,7 +36,7 @@ defmodule AmpSdk.CLIInvokeTest do
         end
       )
 
-      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path, "AMP_TEST_SLEEP_SEC" => "0.2"}, fn ->
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path, "AMP_TEST_BLOCK_FOREVER" => "1"}, fn ->
         assert {:error, %Error{kind: :command_timeout}} =
                  CLIInvoke.invoke(["threads", "list"], default_timeout_ms: 10)
       end)

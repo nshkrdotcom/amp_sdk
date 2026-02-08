@@ -48,10 +48,22 @@ defmodule AmpSdk.Config do
 
   @spec normalize_string_map(map() | keyword()) :: map()
   def normalize_string_map(entries) when is_map(entries) do
-    Map.new(entries, fn {key, value} -> {to_string(key), to_string(value)} end)
+    entries
+    |> Map.to_list()
+    |> normalize_string_pairs()
   end
 
   def normalize_string_map(entries) when is_list(entries) do
-    Map.new(entries, fn {key, value} -> {to_string(key), to_string(value)} end)
+    normalize_string_pairs(entries)
+  end
+
+  defp normalize_string_pairs(entries) do
+    Enum.reduce(entries, %{}, fn
+      {_key, nil}, acc ->
+        acc
+
+      {key, value}, acc ->
+        Map.put(acc, to_string(key), to_string(value))
+    end)
   end
 end

@@ -77,7 +77,6 @@ read_only = [
   AmpSdk.create_permission("Read", "allow"),
   AmpSdk.create_permission("glob", "allow"),
   AmpSdk.create_permission("Grep", "allow"),
-  AmpSdk.create_permission("finder", "allow"),
   AmpSdk.create_permission("Bash", "reject"),
   AmpSdk.create_permission("edit_file", "reject"),
   AmpSdk.create_permission("create_file", "reject")

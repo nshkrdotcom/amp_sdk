@@ -93,7 +93,7 @@ The SDK locates the Amp CLI automatically by checking, in order:
 | 2 | `~/.amp/bin/amp` | Official binary install location |
 | 3 | `~/.local/bin/amp` | Symlink from install script |
 | 4 | System `PATH` | Standard executable lookup |
-| 5 | Node.js `require.resolve` | Legacy npm global install |
+| 5 | Node.js `require.resolve` | Legacy npm global install (probe timeout: `2_000ms`) |
 
 ---
 
@@ -132,7 +132,7 @@ alias AmpSdk.Types.{AssistantMessage, ResultMessage, SystemMessage}
 end)
 ```
 
-`AmpSdk.execute/2` returns a lazy `Stream` -- messages arrive as the agent works, and the stream halts automatically when a result or error is received.
+`AmpSdk.execute/2` returns a lazy `Stream` -- messages arrive as the agent works, and the stream halts automatically when a result or error is received. Transport-tagged mailbox events are drained during cleanup, so finished/timeout streams do not leave residual transport messages in the caller mailbox.
 
 ### 3. Continue a Thread
 
@@ -578,6 +578,8 @@ Additional env vars can be passed per-execution via `Options.env`:
 ```elixir
 AmpSdk.run("check env", %Options{env: %{"MY_VAR" => "value"}})
 ```
+
+`nil` values in `Options.env` and MCP constructor maps (`env`, `headers`) are dropped during normalization.
 
 For MCP config constructors, conflicting atom/string versions of the same key are rejected as `:invalid_configuration` to avoid ambiguous input maps.
 

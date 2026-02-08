@@ -19,7 +19,7 @@ File.write!(tmp_path, Jason.encode!(tasks))
 IO.puts("Wrote tasks to: #{tmp_path}")
 
 # Use dry-run to validate without creating tasks
-case AmpSdk.tasks_import(tmp_path) do
+case AmpSdk.tasks_import(tmp_path, dry_run: true) do
   {:ok, output} -> IO.puts("Import result:\n#{output}")
   {:error, err} -> IO.puts("Error (may require valid repo URL): #{inspect(err)}")
 end

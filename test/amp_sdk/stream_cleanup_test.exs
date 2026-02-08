@@ -15,9 +15,6 @@ defmodule AmpSdk.StreamCleanupTest do
 
     # Keep process alive until stdin is closed by transport cleanup.
     cat > /dev/null || true
-
-    sleep_sec="${AMP_TEST_SLEEP_SEC:-2}"
-    sleep "$sleep_sec"
     """
 
     TestSupport.write_executable!(dir, "amp_stream_cleanup_stub", script)
@@ -35,12 +32,25 @@ defmodule AmpSdk.StreamCleanupTest do
     trap '' TERM
     trap '' INT
 
-    while true; do
-      sleep 1
-    done
+    tail -f /dev/null
     """
 
     TestSupport.write_executable!(dir, "amp_stream_stubborn_stub", script)
+  end
+
+  defp write_trailing_events_stream_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    cat > /dev/null || true
+
+    echo '{"type":"result","subtype":"success","session_id":"T-cleanup","is_error":false,"result":"ok","duration_ms":1,"num_turns":1}'
+    echo '{"type":"assistant","session_id":"T-cleanup","message":{"role":"assistant","content":[{"type":"text","text":"late"}]}}'
+    echo "late stderr" >&2
+    """
+
+    TestSupport.write_executable!(dir, "amp_stream_trailing_stub", script)
   end
 
   defp process_alive?(pid) when is_integer(pid) do
@@ -50,21 +60,13 @@ defmodule AmpSdk.StreamCleanupTest do
     end
   end
 
-  defp wait_until(fun, timeout_ms) do
-    deadline = System.monotonic_time(:millisecond) + timeout_ms
-    do_wait_until(fun, deadline)
-  end
-
-  defp do_wait_until(fun, deadline) do
-    if fun.() do
-      :ok
-    else
-      if System.monotonic_time(:millisecond) >= deadline do
-        :timeout
-      else
-        Process.sleep(20)
-        do_wait_until(fun, deadline)
-      end
+  defp flush_transport_messages do
+    receive do
+      {:amp_sdk_transport, _ref, _event} ->
+        flush_transport_messages()
+    after
+      0 ->
+        :ok
     end
   end
 
@@ -82,8 +84,7 @@ defmodule AmpSdk.StreamCleanupTest do
     opts = %Options{
       permissions: [Permission.new!("Bash", "ask")],
       env: %{
-        "AMP_TEST_PID_FILE" => pid_file,
-        "AMP_TEST_SLEEP_SEC" => "2"
+        "AMP_TEST_PID_FILE" => pid_file
       },
       stream_timeout_ms: 200
     }
@@ -96,7 +97,7 @@ defmodule AmpSdk.StreamCleanupTest do
 
         if File.exists?(pid_file) do
           pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
-          assert wait_until(fn -> not process_alive?(pid) end, 1_000) == :ok
+          assert TestSupport.wait_until(fn -> not process_alive?(pid) end, 1_000) == :ok
         end
 
         new_temp_dirs =
@@ -107,6 +108,24 @@ defmodule AmpSdk.StreamCleanupTest do
 
         leaked = MapSet.difference(new_temp_dirs, existing_temp_dirs)
         assert MapSet.size(leaked) == 0
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "cleanup drains trailing transport events after final result" do
+    dir = TestSupport.tmp_dir!("amp_stream_mailbox_cleanup")
+    amp_path = write_trailing_events_stream_stub!(dir)
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        flush_transport_messages()
+
+        messages = AmpSdk.execute("hello", %Options{}) |> Enum.to_list()
+        assert [%AmpSdk.Types.ResultMessage{result: "ok"}] = messages
+
+        refute_receive {:amp_sdk_transport, _ref, _event}, 200
       end)
     after
       File.rm_rf(dir)
@@ -125,13 +144,17 @@ defmodule AmpSdk.StreamCleanupTest do
 
     try do
       TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        flush_transport_messages()
+
         messages = AmpSdk.execute("hello", opts) |> Enum.to_list()
         assert [%AmpSdk.Types.ErrorResultMessage{} = msg] = messages
         assert msg.error =~ "Timed out"
 
-        assert wait_until(fn -> File.exists?(pid_file) end, 1_000) == :ok
+        assert TestSupport.wait_until(fn -> File.exists?(pid_file) end, 1_000) == :ok
         pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
-        assert wait_until(fn -> not process_alive?(pid) end, 4_000) == :ok
+        assert TestSupport.wait_until(fn -> not process_alive?(pid) end, 4_000) == :ok
+
+        refute_receive {:amp_sdk_transport, _ref, _event}, 200
       end)
     after
       File.rm_rf(dir)

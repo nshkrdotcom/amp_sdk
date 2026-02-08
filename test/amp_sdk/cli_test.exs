@@ -72,6 +72,46 @@ defmodule AmpSdk.CLITest do
         File.rm_rf(home_dir)
       end
     end
+
+    test "returns promptly when node package resolve probe hangs" do
+      temp_dir = TestSupport.tmp_dir!("amp_cli_node_hang")
+      home_dir = TestSupport.tmp_dir!("amp_cli_home")
+
+      _node_path =
+        TestSupport.write_executable!(
+          temp_dir,
+          "node",
+          "#!/usr/bin/env bash\nset -euo pipefail\ntail -f /dev/null\n"
+        )
+
+      try do
+        TestSupport.with_env(
+          %{
+            "AMP_CLI_PATH" => "/nonexistent/amp",
+            "PATH" => temp_dir,
+            "HOME" => home_dir
+          },
+          fn ->
+            task = Task.async(fn -> CLI.resolve() end)
+
+            case Task.yield(task, AmpSdk.Defaults.cli_node_probe_timeout_ms() + 750) do
+              {:ok, {:error, %Error{kind: :cli_not_found}}} ->
+                :ok
+
+              {:ok, other} ->
+                flunk("expected cli_not_found error, got: #{inspect(other)}")
+
+              nil ->
+                Task.shutdown(task, :brutal_kill)
+                flunk("CLI.resolve/0 did not return within probe timeout budget")
+            end
+          end
+        )
+      after
+        File.rm_rf(temp_dir)
+        File.rm_rf(home_dir)
+      end
+    end
   end
 
   describe "resolve!/0" do

@@ -4,7 +4,10 @@ Runnable examples demonstrating every public function of the Amp SDK for Elixir.
 
 > **Prerequisite:** The [Amp CLI](https://ampcode.com) must be installed and authenticated (`amp login`).
 
-> **Behavior note:** Some examples intentionally exercise expected error paths (for example `tools_make.exs` in headless mode, or `mcp_oauth.exs` without a configured OAuth server). They still exit successfully to demonstrate API usage without failing the suite.
+> **Behavior note:** Some examples are optional and return exit code `20` (skip) when prerequisites are missing. `run_all.sh` reports these as skipped instead of passed/failed.
+> - `tools_make.exs`: skips automatically if the installed Amp CLI requires interactive input
+> - `threads_handoff_replay.exs`: set `AMP_RUN_REPLAY=1` to run replay
+> - `mcp_oauth.exs`: set `AMP_MCP_OAUTH_SERVER` and `AMP_MCP_OAUTH_SERVER_URL` to run status/logout; set `AMP_MCP_OAUTH_RUN_LOGIN=1` to run login too
 
 ## Run All
 
@@ -38,7 +41,7 @@ mix run examples/<name>.exs
 | [tools_list.exs](tools_list.exs) | List all available tools |
 | [tools_show.exs](tools_show.exs) | Show tool schema (e.g., `Read`) |
 | [tools_use.exs](tools_use.exs) | Invoke a tool directly |
-| [tools_make.exs](tools_make.exs) | Create a new tool (interactive) |
+| [tools_make.exs](tools_make.exs) | Create a new tool (auto-skips if CLI requires interactive input) |
 | [skills_list.exs](skills_list.exs) | List installed skills |
 | [skills_manage.exs](skills_manage.exs) | Skill lifecycle: add, info, remove |
 | [permissions_list.exs](permissions_list.exs) | List permission rules |

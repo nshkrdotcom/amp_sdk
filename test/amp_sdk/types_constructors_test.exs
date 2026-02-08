@@ -39,4 +39,16 @@ defmodule AmpSdk.TypesConstructorsTest do
 
     assert message =~ "conflicting values"
   end
+
+  test "MCP constructors drop nil env/header values" do
+    assert {:ok, %MCPStdioServer{env: env}} =
+             MCPStdioServer.new(command: "npx", env: %{"A" => "1", "B" => nil})
+
+    assert env == %{"A" => "1"}
+
+    assert {:ok, %MCPHttpServer{headers: headers}} =
+             MCPHttpServer.new(url: "https://example.com", headers: %{"A" => "1", "B" => nil})
+
+    assert headers == %{"A" => "1"}
+  end
 end

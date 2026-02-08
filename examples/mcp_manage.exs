@@ -3,12 +3,12 @@
 
 IO.puts("=== MCP Manage ===\n")
 
-server_name = "amp-sdk-test-echo"
+server_name = "amp-sdk-test-echo-#{System.unique_integer([:positive])}"
 
 # Add a local MCP server (stdio)
 IO.puts("Adding MCP server '#{server_name}':")
 
-case AmpSdk.mcp_add(server_name, ["echo", "hello"], env: %{}) do
+case AmpSdk.mcp_add(server_name, ["echo", "hello"], env: %{}, workspace: true) do
   {:ok, output} -> IO.puts("  #{String.trim(output)}")
   {:error, err} -> IO.puts("  Error: #{inspect(err)}")
 end

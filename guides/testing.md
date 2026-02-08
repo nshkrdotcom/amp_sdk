@@ -111,8 +111,6 @@ end
 
 ## SDK Test Suite
 
-The SDK itself currently ships with 177 tests:
-
 ```bash
 # Run unit tests (mocked, fast)
 mix test

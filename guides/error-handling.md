@@ -41,6 +41,8 @@ At the low-level transport boundary (`AmpSdk.Transport.Erlexec`), errors are ret
 {:error, {:transport, reason}}
 ```
 
+This applies consistently across transport operations, including startup (`start/1`, `start_link/1`).
+
 Normalize these when you need the unified envelope:
 
 ```elixir

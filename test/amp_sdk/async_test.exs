@@ -23,23 +23,19 @@ defmodule AmpSdk.AsyncTest do
 
     for _ <- 1..100 do
       assert {:error, %Error{kind: :task_timeout}} =
-               Async.run_with_timeout(fn -> Process.sleep(20) end, 0)
+               Async.run_with_timeout(
+                 fn ->
+                   receive do
+                   after
+                     1_000 ->
+                       :ok
+                   end
+                 end,
+                 0
+               )
     end
 
-    Process.sleep(10)
-
-    assert mailbox_messages()
-           |> Enum.any?(fn
-             {:amp_sdk_async_result, _ref, _value} -> true
-             _ -> false
-           end) == false
-  end
-
-  defp mailbox_messages do
-    case Process.info(self(), :messages) do
-      {:messages, messages} -> messages
-      _ -> []
-    end
+    refute_receive {:amp_sdk_async_result, _ref, _value}, 200
   end
 
   defp flush_async_results do

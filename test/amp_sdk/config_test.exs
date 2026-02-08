@@ -21,4 +21,9 @@ defmodule AmpSdk.ConfigTest do
 
     assert message =~ "conflicting values"
   end
+
+  test "normalize_string_map/1 drops nil values" do
+    assert Config.normalize_string_map(%{"A" => "1", :B => nil}) == %{"A" => "1"}
+    assert Config.normalize_string_map([{"A", "1"}, {:B, nil}]) == %{"A" => "1"}
+  end
 end

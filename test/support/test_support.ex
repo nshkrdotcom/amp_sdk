@@ -37,4 +37,29 @@ defmodule AmpSdk.TestSupport do
       end)
     end
   end
+
+  def wait_until(fun, timeout_ms, poll_interval_ms \\ 20)
+      when is_function(fun, 0) and is_integer(timeout_ms) and timeout_ms >= 0 and
+             is_integer(poll_interval_ms) and poll_interval_ms >= 0 do
+    deadline = System.monotonic_time(:millisecond) + timeout_ms
+    do_wait_until(fun, deadline, poll_interval_ms)
+  end
+
+  defp do_wait_until(fun, deadline, poll_interval_ms) do
+    if fun.() do
+      :ok
+    else
+      if System.monotonic_time(:millisecond) >= deadline do
+        :timeout
+      else
+        receive do
+        after
+          poll_interval_ms ->
+            :ok
+        end
+
+        do_wait_until(fun, deadline, poll_interval_ms)
+      end
+    end
+  end
 end

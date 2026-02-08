@@ -15,9 +15,8 @@ defmodule AmpSdk.StreamExecuteTest do
       cat > /dev/null || true
     fi
 
-    sleep_sec="${AMP_TEST_SLEEP_SEC:-0}"
-    if [ "$sleep_sec" != "0" ]; then
-      sleep "$sleep_sec"
+    if [ "${AMP_TEST_BLOCK_FOREVER:-0}" = "1" ]; then
+      tail -f /dev/null
     fi
 
     if [ -n "${AMP_TEST_OUTPUT_JSON:-}" ]; then
@@ -76,7 +75,7 @@ defmodule AmpSdk.StreamExecuteTest do
         messages =
           AmpSdk.execute("wait", %Options{
             stream_timeout_ms: 10,
-            env: %{"AMP_TEST_SLEEP_SEC" => "0.2"}
+            env: %{"AMP_TEST_BLOCK_FOREVER" => "1"}
           })
           |> Enum.to_list()
 

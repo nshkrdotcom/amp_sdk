@@ -22,10 +22,7 @@ defmodule AmpSdk.Tools do
     tool_args = Keyword.get(opts, :args, [])
 
     args =
-      Enum.reduce(tool_args, args, fn
-        {key, value}, acc -> acc ++ ["--#{key}", to_string(value)]
-        arg, acc when is_binary(arg) -> acc ++ [arg]
-      end)
+      Enum.reduce(tool_args, args, &append_tool_arg/2)
 
     run_opts =
       opts
@@ -35,8 +32,27 @@ defmodule AmpSdk.Tools do
     CLIInvoke.invoke(args, run_opts)
   end
 
-  @spec make(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
-  def make(tool_name) when is_binary(tool_name) do
-    CLIInvoke.invoke(["tools", "make", tool_name])
+  @spec make(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
+  def make(tool_name, opts \\ []) when is_binary(tool_name) and is_list(opts) do
+    CLIInvoke.invoke(["tools", "make", tool_name], opts)
   end
+
+  defp append_tool_arg({_key, nil}, acc), do: acc
+
+  defp append_tool_arg({key, values}, acc) when is_list(values) do
+    flag = "--#{key}"
+
+    Enum.reduce(values, acc, fn value, inner ->
+      inner ++ [flag, encode_tool_value(value)]
+    end)
+  end
+
+  defp append_tool_arg({key, value}, acc) do
+    acc ++ ["--#{key}", encode_tool_value(value)]
+  end
+
+  defp append_tool_arg(arg, acc) when is_binary(arg), do: acc ++ [arg]
+
+  defp encode_tool_value(value) when is_map(value), do: Jason.encode!(value)
+  defp encode_tool_value(value), do: to_string(value)
 end

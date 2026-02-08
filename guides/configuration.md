@@ -103,6 +103,8 @@ Additional env vars per execution:
 AmpSdk.run("check env", %Options{env: %{"MY_VAR" => "value"}})
 ```
 
+`nil` values in `Options.env` are dropped during normalization (they are not coerced into empty-string values).
+
 ## Headless Flags
 
 Control IDE, notification, color, and JetBrains integration:
@@ -129,6 +131,8 @@ AmpSdk.Types.MCPStdioServer.new(%{command: "npx", "command" => "node"})
 
 Conflicts are rejected with `{:error, %AmpSdk.Error{kind: :invalid_configuration}}` to prevent ambiguous configuration.
 
+For MCP constructors, `nil` values inside `env` and `headers` maps are dropped during normalization.
+
 ## Thinking Mode
 
 Include the model's chain-of-thought reasoning in responses:
@@ -152,6 +156,8 @@ The SDK locates the Amp CLI by checking (in order):
 3. `~/.local/bin/amp`
 4. System `PATH`
 5. Node.js `require.resolve('@sourcegraph/amp/package.json')`
+
+The Node.js `require.resolve` probe is bounded by a `2_000ms` timeout to prevent indefinite hangs in misconfigured Node environments.
 
 Use `AmpSdk.CLI.resolve/0` to inspect the command spec:
 

@@ -14,15 +14,11 @@ NC='\033[0m'
 
 PASS=0
 FAIL=0
-CHILD_PID=""
+SKIP=0
 
 cleanup() {
   echo ""
   echo -e "${RED}Interrupted.${NC}"
-  if [ -n "$CHILD_PID" ] && kill -0 "$CHILD_PID" 2>/dev/null; then
-    kill -TERM "$CHILD_PID" 2>/dev/null
-    wait "$CHILD_PID" 2>/dev/null
-  fi
   exit 130
 }
 
@@ -44,16 +40,16 @@ run_example() {
   echo -e "  ${YELLOW}mix run examples/${file}${NC}"
   echo ""
 
-  mix run "examples/${file}" 2>&1 &
-  CHILD_PID=$!
-  wait "$CHILD_PID"
+  mix run "examples/${file}" 2>&1
   local exit_code=$?
-  CHILD_PID=""
 
   echo ""
   if [ $exit_code -eq 0 ]; then
     echo -e "${GREEN}✓ ${name}${NC}"
     PASS=$((PASS + 1))
+  elif [ $exit_code -eq 20 ]; then
+    echo -e "${YELLOW}↷ ${name} (skipped)${NC}"
+    SKIP=$((SKIP + 1))
   else
     echo -e "${RED}✗ ${name} (exit ${exit_code})${NC}"
     FAIL=$((FAIL + 1))
@@ -122,10 +118,11 @@ run_example "MCP OAuth (status/login/logout)"  "mcp_oauth.exs"
 
 # Summary
 header "Results"
-TOTAL=$((PASS + FAIL))
+TOTAL=$((PASS + FAIL + SKIP))
 echo ""
 echo -e "  Total:   ${TOTAL}"
 echo -e "  ${GREEN}Passed:  ${PASS}${NC}"
+echo -e "  ${YELLOW}Skipped: ${SKIP}${NC}"
 echo -e "  ${RED}Failed:  ${FAIL}${NC}"
 echo ""
 

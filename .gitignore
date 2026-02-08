@@ -27,3 +27,6 @@ amp_sdk-*.tar
 
 # Amp Python SDK reference (proprietary, not for distribution)
 /amp/
+
+# Amp CLI workspace-local settings
+/.amp/

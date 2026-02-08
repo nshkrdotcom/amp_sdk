@@ -7,6 +7,7 @@ defmodule AmpSdk.Defaults do
   @transport_call_timeout_ms 5_000
   @transport_force_close_timeout_ms 500
   @transport_headless_timeout_ms 5_000
+  @cli_node_probe_timeout_ms 2_000
   @cli_install_command "curl -fsSL https://ampcode.com/install.sh | bash"
   @cli_not_found_message "Amp CLI not found. Install it with: #{@cli_install_command}"
   @legacy_cli_not_found_message "Amp CLI not found"
@@ -29,6 +30,9 @@ defmodule AmpSdk.Defaults do
 
   @spec transport_headless_timeout_ms() :: pos_integer()
   def transport_headless_timeout_ms, do: @transport_headless_timeout_ms
+
+  @spec cli_node_probe_timeout_ms() :: pos_integer()
+  def cli_node_probe_timeout_ms, do: @cli_node_probe_timeout_ms
 
   @spec cli_install_command() :: String.t()
   def cli_install_command, do: @cli_install_command

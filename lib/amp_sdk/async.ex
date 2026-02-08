@@ -1,7 +1,7 @@
 defmodule AmpSdk.Async do
   @moduledoc false
 
-  alias AmpSdk.{Error, TaskSupport}
+  alias AmpSdk.{Error, ProcessSupport, TaskSupport}
 
   @type shutdown_fun :: (-> :ok)
 
@@ -55,10 +55,12 @@ defmodule AmpSdk.Async do
       timeout ->
         Process.exit(task_pid, :kill)
 
-        receive do
-          {:DOWN, ^monitor_ref, :process, ^task_pid, _reason} -> :ok
-        after
-          0 -> Process.demonitor(monitor_ref, [:flush])
+        case ProcessSupport.await_down(monitor_ref, task_pid, 0) do
+          :down ->
+            :ok
+
+          :timeout ->
+            Process.demonitor(monitor_ref, [:flush])
         end
 
         flush_result_message(result_ref)

@@ -13,10 +13,17 @@ thread_id =
     dangerously_allow_all: true,
     visibility: "private"
   })
-  |> Enum.find_value(fn
-    %AmpSdk.Types.SystemMessage{session_id: id} -> id
-    _ -> nil
+  # Consume the full stream before mutating the thread, otherwise the thread can
+  # still be empty when lifecycle commands run.
+  |> Enum.reduce(nil, fn
+    %AmpSdk.Types.SystemMessage{session_id: id}, _acc -> id
+    _msg, acc -> acc
   end)
+
+if is_nil(thread_id) do
+  IO.puts("Failed to capture thread id from stream output.")
+  System.halt(1)
+end
 
 IO.puts("Created:  #{thread_id}")
 

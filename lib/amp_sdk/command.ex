@@ -1,7 +1,7 @@
 defmodule AmpSdk.Command do
   @moduledoc false
 
-  alias AmpSdk.{CLI, Defaults, Env, Error, Exec, Util}
+  alias AmpSdk.{CLI, Defaults, Env, Error, Exec, ProcessSupport, Util}
   alias AmpSdk.CLI.CommandSpec
 
   @stop_wait_ms 200
@@ -80,25 +80,8 @@ defmodule AmpSdk.Command do
 
     cmd = Exec.build_command(program, args)
 
-    case :exec.run(cmd, exec_opts) do
-      {:ok, pid, os_pid} ->
-        with :ok <- send_stdin(pid, stdin) do
-          collect_erlexec_output(
-            pid,
-            os_pid,
-            stderr_to_stdout,
-            timeout_deadline,
-            [],
-            []
-          )
-        else
-          {:error, reason} ->
-            stop_exec_and_confirm_down(pid, os_pid)
-            {:error, reason}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
+    with {:ok, normalized_stdin} <- normalize_stdin(stdin) do
+      run_exec_command(cmd, exec_opts, normalized_stdin, stderr_to_stdout, timeout_deadline)
     end
   rescue
     error ->
@@ -108,14 +91,51 @@ defmodule AmpSdk.Command do
       {:error, {kind, reason}}
   end
 
-  defp send_stdin(pid, nil), do: send_eof(pid)
+  defp normalize_stdin(nil), do: {:ok, :eof}
 
-  defp send_stdin(pid, stdin) do
-    :ok = :exec.send(pid, IO.iodata_to_binary(stdin))
+  defp normalize_stdin(stdin) do
+    {:ok, IO.iodata_to_binary(stdin)}
+  catch
+    kind, reason ->
+      {:error, {:send_failed, {kind, reason}}}
+  end
+
+  defp send_stdin(pid, :eof), do: send_eof(pid)
+
+  defp send_stdin(pid, stdin) when is_binary(stdin) do
+    :ok = :exec.send(pid, stdin)
     send_eof(pid)
   catch
     kind, reason ->
       {:error, {:send_failed, {kind, reason}}}
+  end
+
+  defp run_exec_command(cmd, exec_opts, normalized_stdin, stderr_to_stdout, timeout_deadline) do
+    case :exec.run(cmd, exec_opts) do
+      {:ok, pid, os_pid} ->
+        handle_started_exec(pid, os_pid, normalized_stdin, stderr_to_stdout, timeout_deadline)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp handle_started_exec(pid, os_pid, normalized_stdin, stderr_to_stdout, timeout_deadline) do
+    case send_stdin(pid, normalized_stdin) do
+      :ok ->
+        collect_erlexec_output(
+          pid,
+          os_pid,
+          stderr_to_stdout,
+          timeout_deadline,
+          [],
+          []
+        )
+
+      {:error, reason} ->
+        stop_exec_and_confirm_down(pid, os_pid)
+        {:error, reason}
+    end
   end
 
   defp send_eof(pid) do
@@ -173,6 +193,7 @@ defmodule AmpSdk.Command do
       {:DOWN, ^os_pid, :process, ^pid, reason} ->
         exit_code = decode_exit_code(reason)
         output = build_output(stderr_to_stdout, stdout_chunks, stderr_chunks)
+        flush_erlexec_messages(pid, os_pid)
         {:ok, {output, exit_code}}
     end
   end
@@ -230,6 +251,7 @@ defmodule AmpSdk.Command do
           {:DOWN, ^os_pid, :process, ^pid, reason} ->
             exit_code = decode_exit_code(reason)
             output = build_output(stderr_to_stdout, stdout_chunks, stderr_chunks)
+            flush_erlexec_messages(pid, os_pid)
             {:ok, {output, exit_code}}
         after
           remaining_timeout ->
@@ -270,13 +292,7 @@ defmodule AmpSdk.Command do
   end
 
   defp await_exec_down(pid, os_pid, timeout_ms) do
-    receive do
-      {:DOWN, ^os_pid, :process, ^pid, _reason} ->
-        :down
-    after
-      timeout_ms ->
-        :timeout
-    end
+    ProcessSupport.await_down(os_pid, pid, timeout_ms)
   end
 
   defp flush_erlexec_messages(pid, os_pid) do

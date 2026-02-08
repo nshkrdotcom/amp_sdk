@@ -93,7 +93,10 @@ Permanently delete a thread:
 Create a handoff thread from an existing thread for multi-agent workflows:
 
 ```elixir
-{:ok, output} = AmpSdk.threads_handoff("T-abc123-def456")
+{:ok, new_thread_id} = AmpSdk.threads_handoff("T-abc123-def456",
+  goal: "Continue with the auth refactor and summarize next steps",
+  print: true
+)
 ```
 
 ## Replaying Threads
@@ -101,8 +104,15 @@ Create a handoff thread from an existing thread for multi-agent workflows:
 Re-run a thread with its original history:
 
 ```elixir
-{:ok, output} = AmpSdk.threads_replay("T-abc123-def456")
+{:ok, output} = AmpSdk.threads_replay("T-abc123-def456",
+  no_typing: true,
+  no_indicator: true,
+  exit_delay: 0
+)
 ```
+
+`threads_replay` is terminal-driven by the Amp CLI; in some non-interactive/headless
+environments the CLI may return an internal error.
 
 ## Exporting Threads
 
@@ -143,9 +153,10 @@ Each execution's `SystemMessage` includes a `session_id` (the thread ID). You ca
 ```elixir
 thread_id =
   AmpSdk.execute("Hello")
-  |> Enum.find_value(fn
-    %AmpSdk.Types.SystemMessage{session_id: id} -> id
-    _ -> nil
+  # Drain the stream fully so the thread is persisted before follow-up commands.
+  |> Enum.reduce(nil, fn
+    %AmpSdk.Types.SystemMessage{session_id: id}, _acc -> id
+    _msg, acc -> acc
   end)
 ```
 
@@ -160,6 +171,6 @@ thread_id =
 | `threads_rename/2` | Rename a thread |
 | `threads_archive/1` | Archive (soft-delete) a thread |
 | `threads_delete/1` | Permanently delete a thread |
-| `threads_handoff/1` | Create a handoff thread |
-| `threads_replay/1` | Replay a thread |
+| `threads_handoff/2` | Create a handoff thread (opts: `goal`, `print`, `input`, `timeout`) |
+| `threads_replay/2` | Replay a thread (opts: `wpm`, `no_typing`, `message_delay`, `tool_progress_delay`, `exit_delay`, `no_indicator`) |
 | `threads_markdown/1` | Export thread as Markdown |

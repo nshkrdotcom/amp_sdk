@@ -81,4 +81,12 @@ defmodule AmpSdk.EnvTest do
       File.rm_rf(dir)
     end
   end
+
+  test "normalize_overrides drops nil values instead of stringifying them" do
+    assert AmpSdk.Env.normalize_overrides(%{"AMP_ALPHA" => "one", "AMP_BETA" => nil}) ==
+             %{"AMP_ALPHA" => "one"}
+
+    assert AmpSdk.Env.normalize_overrides([{"AMP_ALPHA", "one"}, {"AMP_BETA", nil}]) ==
+             %{"AMP_ALPHA" => "one"}
+  end
 end

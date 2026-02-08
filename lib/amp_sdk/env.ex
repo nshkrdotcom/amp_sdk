@@ -81,7 +81,7 @@ defmodule AmpSdk.Env do
       {key, value}, acc ->
         normalized_key = to_string(key)
 
-        if valid_env_key?(normalized_key) do
+        if valid_env_key?(normalized_key) and not is_nil(value) do
           Map.put(acc, normalized_key, to_string(value))
         else
           acc

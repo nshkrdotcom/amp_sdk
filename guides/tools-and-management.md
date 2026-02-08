@@ -14,7 +14,10 @@ List, inspect, and invoke tools directly:
 {:ok, schema} = AmpSdk.tools_show("Read")
 
 # Invoke a tool directly (bypasses the agent loop)
-{:ok, result} = AmpSdk.tools_use("Read", args: [path: "/tmp/file.txt"])
+{:ok, result} = AmpSdk.tools_use("Read",
+  only: "content",
+  args: [path: "/tmp/file.txt", read_range: [1, 20]]
+)
 
 # Create a toolbox skeleton (interactive; may fail in headless CI)
 {:ok, _} = AmpSdk.tools_make("my_tool")
@@ -25,7 +28,7 @@ List, inspect, and invoke tools directly:
 Import and list tasks:
 
 ```elixir
-{:ok, _} = AmpSdk.tasks_import("tasks.json")
+{:ok, _} = AmpSdk.tasks_import("tasks.json", dry_run: true)
 {:ok, output} = AmpSdk.tasks_list()
 ```
 
@@ -98,8 +101,10 @@ Manage Model Context Protocol servers:
 # List configured servers
 {:ok, output} = AmpSdk.mcp_list()
 
-# Add a local command server
-{:ok, _} = AmpSdk.mcp_add("filesystem", ["npx", "-y", "@modelcontextprotocol/server-filesystem"])
+# Add a local command server in workspace settings
+{:ok, _} = AmpSdk.mcp_add("filesystem", ["npx", "-y", "@modelcontextprotocol/server-filesystem"],
+  workspace: true
+)
 
 # Add a remote URL server
 {:ok, _} = AmpSdk.mcp_add("hugging-face", "https://huggingface.co/mcp")
@@ -128,15 +133,16 @@ The server must already be configured (via `mcp_add/3`) and expose OAuth metadat
 ```elixir
 # Register OAuth credentials
 {:ok, _} = AmpSdk.mcp_oauth_login("my-server",
+  server_url: "https://my-server.example.com/mcp",
   client_id: "my-client-id",
   client_secret: "my-secret"
 )
 
 # Check OAuth status
-{:ok, status} = AmpSdk.mcp_oauth_status("my-server")
+{:ok, status} = AmpSdk.mcp_oauth_status("my-server", timeout: 15_000)
 
 # Remove OAuth credentials
-{:ok, _} = AmpSdk.mcp_oauth_logout("my-server")
+{:ok, _} = AmpSdk.mcp_oauth_logout("my-server", timeout: 15_000)
 ```
 
 ## Usage

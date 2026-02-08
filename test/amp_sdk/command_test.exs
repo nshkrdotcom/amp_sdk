@@ -22,9 +22,8 @@ defmodule AmpSdk.CommandTest do
       cat > "$AMP_TEST_STDIN_FILE"
     fi
 
-    sleep_sec="${AMP_TEST_SLEEP_SEC:-0}"
-    if [ "$sleep_sec" != "0" ]; then
-      sleep "$sleep_sec"
+    if [ "${AMP_TEST_BLOCK_FOREVER:-0}" = "1" ]; then
+      tail -f /dev/null
     fi
 
     exit_code="${AMP_TEST_EXIT_CODE:-0}"
@@ -51,13 +50,30 @@ defmodule AmpSdk.CommandTest do
     trap '' TERM
     trap '' INT
 
-    while true; do
-      echo "tick"
-      sleep 0.05
-    done
+    echo "tick"
+    tail -f /dev/null
     """
 
     TestSupport.write_executable!(dir, "amp_stubborn_stub", script)
+  end
+
+  defp write_gated_amp_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ -n "${AMP_TEST_PID_FILE:-}" ]; then
+      echo $$ > "$AMP_TEST_PID_FILE"
+    fi
+
+    if [ -n "${AMP_TEST_GATE_FIFO:-}" ]; then
+      cat "$AMP_TEST_GATE_FIFO" > /dev/null
+    fi
+
+    echo "${AMP_TEST_OUTPUT:-ok}"
+    """
+
+    TestSupport.write_executable!(dir, "amp_gated_stub", script)
   end
 
   defp process_alive?(pid) when is_integer(pid) do
@@ -72,29 +88,31 @@ defmodule AmpSdk.CommandTest do
     :ok
   end
 
-  defp wait_until(fun, timeout_ms) do
-    deadline = System.monotonic_time(:millisecond) + timeout_ms
-    do_wait_until(fun, deadline)
-  end
-
-  defp do_wait_until(fun, deadline) do
-    if fun.() do
-      :ok
-    else
-      if System.monotonic_time(:millisecond) >= deadline do
-        :timeout
-      else
-        Process.sleep(20)
-        do_wait_until(fun, deadline)
-      end
+  defp create_fifo!(path) do
+    case System.cmd("mkfifo", [path], stderr_to_stdout: true) do
+      {_, 0} -> :ok
+      {output, code} -> raise "mkfifo failed with status #{code}: #{output}"
     end
   end
 
-  defp mailbox_messages do
-    case Process.info(self(), :messages) do
-      {:messages, messages} -> messages
-      _ -> []
+  defp mailbox_has_down_for_os_pid?(pid, os_pid) when is_pid(pid) and is_integer(os_pid) do
+    case Process.info(pid, :messages) do
+      {:messages, messages} ->
+        Enum.any?(messages, fn
+          {:DOWN, ^os_pid, :process, _exec_pid, _reason} -> true
+          _ -> false
+        end)
+
+      _ ->
+        false
     end
+  end
+
+  defp maybe_resume_process(pid) when is_pid(pid) do
+    :erlang.resume_process(pid)
+    :ok
+  catch
+    _, _ -> :ok
   end
 
   defp flush_exec_messages do
@@ -166,7 +184,7 @@ defmodule AmpSdk.CommandTest do
       TestSupport.with_env(
         %{
           "AMP_CLI_PATH" => amp_path,
-          "AMP_TEST_SLEEP_SEC" => "0.2"
+          "AMP_TEST_BLOCK_FOREVER" => "1"
         },
         fn ->
           assert {:error, %Error{} = error} = Command.run(["threads", "list"], timeout: 10)
@@ -189,14 +207,14 @@ defmodule AmpSdk.CommandTest do
       TestSupport.with_env(
         %{
           "AMP_CLI_PATH" => amp_path,
-          "AMP_TEST_SLEEP_SEC" => "2",
+          "AMP_TEST_BLOCK_FOREVER" => "1",
           "AMP_TEST_PID_FILE" => pid_file
         },
         fn ->
           assert {:error, %Error{kind: :command_timeout}} =
                    Command.run(["threads", "list"], timeout: 30)
 
-          assert wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
+          assert TestSupport.wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
 
           pid =
             pid_file
@@ -204,7 +222,7 @@ defmodule AmpSdk.CommandTest do
             |> String.trim()
             |> String.to_integer()
 
-          assert wait_until(fn -> not process_alive?(pid) end, 1_500) == :ok
+          assert TestSupport.wait_until(fn -> not process_alive?(pid) end, 1_500) == :ok
         end
       )
     after
@@ -229,7 +247,7 @@ defmodule AmpSdk.CommandTest do
           assert {:error, %Error{kind: :command_timeout}} =
                    Command.run(["threads", "list"], timeout: 20)
 
-          assert wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
+          assert TestSupport.wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
 
           pid =
             pid_file
@@ -237,16 +255,9 @@ defmodule AmpSdk.CommandTest do
             |> String.trim()
             |> String.to_integer()
 
-          assert wait_until(fn -> not process_alive?(pid) end, 2_500) == :ok
-
-          Process.sleep(100)
-
-          assert mailbox_messages()
-                 |> Enum.any?(fn
-                   {:stdout, _os_pid, _data} -> true
-                   {:stderr, _os_pid, _data} -> true
-                   _ -> false
-                 end) == false
+          assert TestSupport.wait_until(fn -> not process_alive?(pid) end, 2_500) == :ok
+          refute_receive {:stdout, _os_pid, _data}, 200
+          refute_receive {:stderr, _os_pid, _data}, 200
         end
       )
     after
@@ -259,39 +270,85 @@ defmodule AmpSdk.CommandTest do
     end
   end
 
-  test "run/2 send_stdin failure force-stops stubborn subprocesses" do
-    dir = TestSupport.tmp_dir!("amp_command_stubborn_stdin")
-    amp_path = write_stubborn_amp_stub!(dir)
+  test "run/3 validates invalid stdin before attempting to run the executable" do
+    missing_cli = %AmpSdk.CLI.CommandSpec{program: "/definitely/missing/amp", argv_prefix: []}
+    invalid_stdin = [List.duplicate("a", 20_000), [300]]
+
+    assert {:error, %Error{kind: :command_execution_failed, cause: {:send_failed, {:error, _}}}} =
+             Command.run(missing_cli, ["threads", "list"], stdin: invalid_stdin, timeout: 500)
+  end
+
+  test "run/2 flushes matching stdout/stderr messages queued after :DOWN" do
+    dir = TestSupport.tmp_dir!("amp_command_down_flush")
+    amp_path = write_gated_amp_stub!(dir)
     pid_file = Path.join(dir, "amp_pid.txt")
+    gate_fifo = Path.join(dir, "gate.fifo")
+
+    create_fifo!(gate_fifo)
 
     try do
       TestSupport.with_env(
         %{
           "AMP_CLI_PATH" => amp_path,
-          "AMP_TEST_PID_FILE" => pid_file
+          "AMP_TEST_PID_FILE" => pid_file,
+          "AMP_TEST_GATE_FIFO" => gate_fifo
         },
         fn ->
-          # 300 is not valid byte iodata, forcing send_stdin failure path.
-          assert {:error, %Error{kind: :command_execution_failed}} =
-                   Command.run(["threads", "list"], stdin: [300], timeout: 500)
+          parent = self()
 
-          assert wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
+          worker =
+            spawn(fn ->
+              send(parent, {:command_worker_started, self()})
 
-          pid =
-            pid_file
-            |> File.read!()
-            |> String.trim()
-            |> String.to_integer()
+              result = Command.run(["threads", "list"], timeout: 5_000)
 
-          assert wait_until(fn -> not process_alive?(pid) end, 2_500) == :ok
+              messages =
+                case Process.info(self(), :messages) do
+                  {:messages, current} -> current
+                  _ -> []
+                end
+
+              send(parent, {:command_worker_finished, result, messages})
+            end)
+
+          try do
+            assert_receive {:command_worker_started, ^worker}, 500
+            assert TestSupport.wait_until(fn -> File.exists?(pid_file) end, 1_000) == :ok
+            os_pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
+
+            _ = :erlang.suspend_process(worker)
+
+            try do
+              File.write!(gate_fifo, "go")
+              assert TestSupport.wait_until(fn -> not process_alive?(os_pid) end, 1_000) == :ok
+
+              assert TestSupport.wait_until(
+                       fn -> mailbox_has_down_for_os_pid?(worker, os_pid) end,
+                       1_000
+                     ) ==
+                       :ok
+
+              send(worker, {:stdout, os_pid, "injected-stdout"})
+              send(worker, {:stderr, os_pid, "injected-stderr"})
+            after
+              :ok = maybe_resume_process(worker)
+            end
+
+            assert_receive {:command_worker_finished, {:ok, "ok"}, leftover_messages}, 2_000
+
+            refute Enum.any?(leftover_messages, fn
+                     {:stdout, ^os_pid, "injected-stdout"} -> true
+                     {:stderr, ^os_pid, "injected-stderr"} -> true
+                     _ -> false
+                   end)
+          after
+            if Process.alive?(worker) do
+              Process.exit(worker, :kill)
+            end
+          end
         end
       )
     after
-      if File.exists?(pid_file) do
-        pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
-        kill_process(pid)
-      end
-
       File.rm_rf(dir)
     end
   end

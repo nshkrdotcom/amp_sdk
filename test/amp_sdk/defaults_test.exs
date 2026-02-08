@@ -11,6 +11,7 @@ defmodule AmpSdk.DefaultsTest do
     assert Defaults.transport_call_timeout_ms() == 5_000
     assert Defaults.transport_force_close_timeout_ms() == 500
     assert Defaults.transport_headless_timeout_ms() == 5_000
+    assert Defaults.cli_node_probe_timeout_ms() == 2_000
   end
 
   test "Options stream timeout tracks shared defaults" do

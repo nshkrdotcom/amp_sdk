@@ -1,7 +1,7 @@
 defmodule AmpSdk.Stream do
   @moduledoc "Manages streaming execution of the Amp CLI."
 
-  alias AmpSdk.{CLI, Env, Error, Types, Util}
+  alias AmpSdk.{CLI, Env, Error, ProcessSupport, Types, Util}
   alias AmpSdk.Transport.Erlexec
   alias AmpSdk.Types.Options
 
@@ -231,8 +231,9 @@ defmodule AmpSdk.Stream do
   defp mark_done(%State{} = state), do: %{state | done?: true}
   defp mark_result_received(%State{} = state), do: %{state | received_result?: true, done?: true}
 
-  defp cleanup(%State{transport: transport, temp_dir: temp_dir}) do
+  defp cleanup(%State{transport: transport, temp_dir: temp_dir, transport_ref: ref}) do
     close_transport_with_timeout(transport, @transport_close_grace_ms)
+    flush_transport_messages(ref)
     cleanup_temp_dir(temp_dir)
     :ok
   end
@@ -245,34 +246,44 @@ defmodule AmpSdk.Stream do
     await_down_or_shutdown(ref, transport, timeout_ms)
   end
 
-  defp await_down_or_shutdown(ref, transport, timeout_ms) do
+  defp flush_transport_messages(ref) when is_reference(ref) do
     receive do
-      {:DOWN, ^ref, :process, ^transport, _reason} ->
-        :ok
+      {:amp_sdk_transport, ^ref, _event} ->
+        flush_transport_messages(ref)
     after
-      timeout_ms ->
+      0 ->
+        :ok
+    end
+  end
+
+  defp await_down_or_shutdown(ref, transport, timeout_ms) do
+    case ProcessSupport.await_down(ref, transport, timeout_ms) do
+      :down ->
+        :ok
+
+      :timeout ->
         safe_shutdown(transport)
         await_down_or_kill(ref, transport, 250)
     end
   end
 
   defp await_down_or_kill(ref, transport, timeout_ms) do
-    receive do
-      {:DOWN, ^ref, :process, ^transport, _reason} ->
+    case ProcessSupport.await_down(ref, transport, timeout_ms) do
+      :down ->
         :ok
-    after
-      timeout_ms ->
+
+      :timeout ->
         safe_kill(transport)
         await_down_or_demonitor(ref, transport, 250)
     end
   end
 
   defp await_down_or_demonitor(ref, transport, timeout_ms) do
-    receive do
-      {:DOWN, ^ref, :process, ^transport, _reason} ->
+    case ProcessSupport.await_down(ref, transport, timeout_ms) do
+      :down ->
         :ok
-    after
-      timeout_ms ->
+
+      :timeout ->
         Process.demonitor(ref, [:flush])
         :ok
     end

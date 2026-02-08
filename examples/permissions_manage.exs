@@ -18,13 +18,30 @@ end
 # Add a permission rule
 IO.puts("\nAdding Read allow rule:")
 
-case AmpSdk.permissions_add("Read", "allow") do
-  {:ok, output} ->
-    result = String.trim(output)
-    if result == "", do: IO.puts("  OK"), else: IO.puts("  #{result}")
+already_allowed? =
+  case AmpSdk.permissions_list() do
+    {:ok, output} ->
+      output
+      |> String.split("\n", trim: true)
+      |> Enum.map(&String.trim/1)
+      |> Enum.any?(&(&1 == "allow Read"))
 
-  {:error, err} ->
-    IO.puts("  Error: #{inspect(err)}")
+    {:error, _err} ->
+      false
+  end
+
+if already_allowed? do
+  IO.puts("  Rule already exists (skipping add).")
+else
+  case AmpSdk.permissions_add("Read", "allow") do
+    {:ok, output} ->
+      result = String.trim(output)
+      if result == "", do: IO.puts("  OK"), else: IO.puts("  #{result}")
+
+    {:error, err} ->
+      IO.puts("  Error: #{inspect(err)}")
+      System.halt(1)
+  end
 end
 
 System.halt(0)

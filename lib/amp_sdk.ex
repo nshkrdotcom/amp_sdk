@@ -52,20 +52,20 @@ defmodule AmpSdk do
   defdelegate threads_rename(thread_id, name), to: AmpSdk.Threads, as: :rename
   defdelegate threads_archive(thread_id), to: AmpSdk.Threads, as: :archive
   defdelegate threads_delete(thread_id), to: AmpSdk.Threads, as: :delete
-  defdelegate threads_handoff(thread_id), to: AmpSdk.Threads, as: :handoff
-  defdelegate threads_replay(thread_id), to: AmpSdk.Threads, as: :replay
+  defdelegate threads_handoff(thread_id, opts \\ []), to: AmpSdk.Threads, as: :handoff
+  defdelegate threads_replay(thread_id, opts \\ []), to: AmpSdk.Threads, as: :replay
 
   # === Tools ===
 
   defdelegate tools_list(), to: AmpSdk.Tools, as: :list
   defdelegate tools_show(tool_name), to: AmpSdk.Tools, as: :show
   defdelegate tools_use(tool_name, opts \\ []), to: AmpSdk.Tools, as: :use
-  defdelegate tools_make(tool_name), to: AmpSdk.Tools, as: :make
+  defdelegate tools_make(tool_name, opts \\ []), to: AmpSdk.Tools, as: :make
 
   # === Tasks ===
 
   defdelegate tasks_list(), to: AmpSdk.Tasks, as: :list
-  defdelegate tasks_import(json_file), to: AmpSdk.Tasks, as: :import_tasks
+  defdelegate tasks_import(json_file, opts \\ []), to: AmpSdk.Tasks, as: :import_tasks
 
   # === Review ===
 
@@ -87,13 +87,13 @@ defmodule AmpSdk do
   # === MCP ===
 
   defdelegate mcp_add(name, command_or_url, opts \\ []), to: AmpSdk.MCP, as: :add
-  defdelegate mcp_list(), to: AmpSdk.MCP, as: :list
+  defdelegate mcp_list(opts \\ []), to: AmpSdk.MCP, as: :list
   defdelegate mcp_remove(name), to: AmpSdk.MCP, as: :remove
   defdelegate mcp_doctor(), to: AmpSdk.MCP, as: :doctor
   defdelegate mcp_approve(name), to: AmpSdk.MCP, as: :approve
   defdelegate mcp_oauth_login(server_name, opts \\ []), to: AmpSdk.MCP, as: :oauth_login
-  defdelegate mcp_oauth_logout(server_name), to: AmpSdk.MCP, as: :oauth_logout
-  defdelegate mcp_oauth_status(server_name), to: AmpSdk.MCP, as: :oauth_status
+  defdelegate mcp_oauth_logout(server_name, opts \\ []), to: AmpSdk.MCP, as: :oauth_logout
+  defdelegate mcp_oauth_status(server_name, opts \\ []), to: AmpSdk.MCP, as: :oauth_status
 
   # === Usage ===
 

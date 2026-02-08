@@ -3,7 +3,7 @@ defmodule AmpSdk.CLI do
 
   import Bitwise
 
-  alias AmpSdk.{Defaults, Error}
+  alias AmpSdk.{Defaults, Error, TaskSupport}
 
   defmodule CommandSpec do
     @moduledoc "Executable command configuration for invoking the Amp CLI."
@@ -95,10 +95,7 @@ defmodule AmpSdk.CLI do
 
   defp check_node_resolve do
     with node when is_binary(node) <- System.find_executable("node"),
-         {output, 0} <-
-           System.cmd(node, ["-p", "require.resolve('@sourcegraph/amp/package.json')"],
-             stderr_to_stdout: true
-           ),
+         {output, 0} <- run_node_probe(node),
          result <- resolve_node_package(String.trim(output), node),
          {:ok, _spec} <- result do
       result
@@ -107,6 +104,27 @@ defmodule AmpSdk.CLI do
     end
   rescue
     _error in [File.Error, Jason.DecodeError, ErlangError] -> :error
+  end
+
+  defp run_node_probe(node) do
+    case TaskSupport.async_nolink(fn ->
+           System.cmd(node, ["-p", "require.resolve('@sourcegraph/amp/package.json')"],
+             stderr_to_stdout: true
+           )
+         end) do
+      {:ok, task} ->
+        case Task.yield(task, Defaults.cli_node_probe_timeout_ms()) ||
+               Task.shutdown(task, :brutal_kill) do
+          {:ok, {output, status}} when is_binary(output) and is_integer(status) ->
+            {output, status}
+
+          _ ->
+            :error
+        end
+
+      {:error, _reason} ->
+        :error
+    end
   end
 
   defp resolve_node_package(package_json_path, node_path) do
