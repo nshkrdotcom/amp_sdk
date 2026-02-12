@@ -31,7 +31,7 @@ Or set the `AMP_API_KEY` environment variable.
 # mix.exs
 def deps do
   [
-    {:amp_sdk, "~> 0.3.0"}
+    {:amp_sdk, "~> 0.3.1"}
   ]
 end
 ```

@@ -14,6 +14,7 @@ defmodule AmpSdk.Transport do
   @callback subscribe(t(), pid(), subscription_tag()) :: :ok | {:error, term()}
   @callback close(t()) :: :ok
   @callback force_close(t()) :: :ok | {:error, term()}
+  @callback interrupt(t()) :: :ok | {:error, term()}
   @callback status(t()) :: :connected | :disconnected | :error
   @callback end_input(t()) :: :ok | {:error, term()}
 

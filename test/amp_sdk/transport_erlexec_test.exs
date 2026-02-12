@@ -285,4 +285,48 @@ defmodule AmpSdk.Transport.ErlexecTest do
       end
     end
   end
+
+  test "handles UTF-8 codepoint split across stdout chunks" do
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "sleep 5"]
+      )
+
+    ref = make_ref()
+    :ok = Erlexec.subscribe(transport, self(), ref)
+
+    try do
+      state = :sys.get_state(transport)
+      {_exec_pid, os_pid} = state.subprocess
+
+      line = "hello " <> <<226, 128, 148>> <> " world\n"
+      {idx, _len} = :binary.match(line, <<226, 128, 148>>)
+      chunk1 = :binary.part(line, 0, idx + 1)
+      chunk2 = :binary.part(line, idx + 1, byte_size(line) - idx - 1)
+
+      send(transport, {:stdout, os_pid, chunk1})
+      send(transport, {:stdout, os_pid, chunk2})
+
+      assert_receive {:amp_sdk_transport, ^ref,
+                      {:message, "hello " <> <<226, 128, 148>> <> " world"}},
+                     2_000
+    after
+      _ = Erlexec.force_close(transport)
+    end
+  end
+
+  test "supports interrupt/1 for in-flight subprocesses" do
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "cat"]
+      )
+
+    try do
+      assert :ok = Erlexec.interrupt(transport)
+    after
+      _ = Erlexec.force_close(transport)
+    end
+  end
 end
