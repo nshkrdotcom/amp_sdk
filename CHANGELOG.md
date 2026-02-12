@@ -7,11 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.1] - 2026-02-11
+## [0.4.0] - 2026-02-11
 
 ### Added
 
-- `AmpSdk.Transport.interrupt/1` callback implementation in the Erlexec transport, allowing cooperative interruption of in-flight subprocess execution.
+- Transport `interrupt/1` callback implementation in the Erlexec transport, allowing cooperative interruption of in-flight subprocess execution.
 
 ### Fixed
 

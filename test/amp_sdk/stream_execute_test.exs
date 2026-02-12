@@ -27,6 +27,34 @@ defmodule AmpSdk.StreamExecuteTest do
     TestSupport.write_executable!(dir, "amp_stream_stub", script)
   end
 
+  defp write_stderr_exit_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    cat > /dev/null || true
+    echo "amp stream failed hard" >&2
+    exit 7
+    """
+
+    TestSupport.write_executable!(dir, "amp_stream_stderr_exit_stub", script)
+  end
+
+  defp write_large_stderr_exit_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    cat > /dev/null || true
+    for i in $(seq 1 200); do
+      printf 'stderr-line-%03d\\n' "$i" >&2
+    done
+    exit 9
+    """
+
+    TestSupport.write_executable!(dir, "amp_stream_large_stderr_exit_stub", script)
+  end
+
   test "execute/2 accepts user input message lists" do
     dir = TestSupport.tmp_dir!("amp_stream_execute")
     stdin_file = Path.join(dir, "stdin.jsonl")
@@ -81,6 +109,51 @@ defmodule AmpSdk.StreamExecuteTest do
 
         assert [%ErrorResultMessage{} = error] = messages
         assert error.error =~ "Timed out"
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "execute/2 includes structured transport exit details" do
+    dir = TestSupport.tmp_dir!("amp_stream_stderr_exit")
+    amp_path = write_stderr_exit_stub!(dir)
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        messages = AmpSdk.execute("boom", %Options{}) |> Enum.to_list()
+
+        assert [%ErrorResultMessage{} = error] = messages
+        assert error.kind == :transport_exit
+        assert error.exit_code == 7
+        assert error.stderr =~ "amp stream failed hard"
+        assert is_map(error.details)
+        assert error.details["exit_code"] == 7
+        assert error.details["stderr"] =~ "amp stream failed hard"
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "execute/2 caps stderr tail and flags truncation metadata" do
+    dir = TestSupport.tmp_dir!("amp_stream_large_stderr_exit")
+    amp_path = write_large_stderr_exit_stub!(dir)
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        messages =
+          AmpSdk.execute("boom", %Options{max_stderr_buffer_bytes: 96})
+          |> Enum.to_list()
+
+        assert [%ErrorResultMessage{} = error] = messages
+        assert error.kind == :transport_exit
+        assert error.exit_code == 9
+        assert error.stderr_truncated? == true
+        assert byte_size(error.stderr || "") <= 96
+        assert error.stderr =~ "stderr-line-200"
+        refute error.stderr =~ "stderr-line-001"
+        assert error.details["stderr_truncated?"] == true
       end)
     after
       File.rm_rf(dir)

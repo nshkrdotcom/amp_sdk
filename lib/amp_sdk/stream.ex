@@ -12,6 +12,7 @@ defmodule AmpSdk.Stream do
   defmodule State do
     @moduledoc false
     @default_receive_timeout_ms AmpSdk.Defaults.stream_timeout_ms()
+    @default_max_stderr_buffer_bytes AmpSdk.Defaults.stream_max_stderr_buffer_bytes()
 
     @enforce_keys [:transport, :transport_ref, :receive_timeout_ms]
     defstruct transport: nil,
@@ -20,6 +21,8 @@ defmodule AmpSdk.Stream do
               received_result?: false,
               temp_dir: nil,
               stderr: "",
+              stderr_truncated?: false,
+              max_stderr_buffer_bytes: @default_max_stderr_buffer_bytes,
               receive_timeout_ms: @default_receive_timeout_ms
 
     @type t :: %__MODULE__{
@@ -29,6 +32,8 @@ defmodule AmpSdk.Stream do
             received_result?: boolean(),
             temp_dir: String.t() | nil,
             stderr: String.t(),
+            stderr_truncated?: boolean(),
+            max_stderr_buffer_bytes: pos_integer(),
             receive_timeout_ms: pos_integer()
           }
   end
@@ -55,13 +60,16 @@ defmodule AmpSdk.Stream do
         env = build_env(options)
         cwd = options.cwd || File.cwd!()
         transport_ref = make_ref()
+        max_stderr_buffer_bytes = resolve_max_stderr_buffer_bytes(options)
+        transport_stderr_cap = max_stderr_buffer_bytes + 1
 
         case Erlexec.start(
                command: command.program,
                args: full_args,
                cwd: cwd,
                env: Enum.to_list(env),
-               subscriber: {self(), transport_ref}
+               subscriber: {self(), transport_ref},
+               max_stderr_buffer_size: transport_stderr_cap
              ) do
           {:ok, transport} ->
             case send_initial_input(transport, input) do
@@ -70,6 +78,7 @@ defmodule AmpSdk.Stream do
                   transport: transport,
                   transport_ref: transport_ref,
                   temp_dir: temp_dir,
+                  max_stderr_buffer_bytes: max_stderr_buffer_bytes,
                   receive_timeout_ms: options.stream_timeout_ms
                 }
 
@@ -136,10 +145,13 @@ defmodule AmpSdk.Stream do
   end
 
   defp receive_next({:error, reason}) do
-    error_msg = %AmpSdk.Types.ErrorResultMessage{
-      error: "Failed to start: #{Error.message(reason)}",
-      is_error: true
-    }
+    normalized = Error.normalize(reason, kind: :stream_start_failed)
+
+    error_msg =
+      build_error_result("Failed to start: #{normalized.message}",
+        kind: :stream_start_failed,
+        details: %{"cause" => inspect(normalized.cause)}
+      )
 
     {[error_msg], {:halted}}
   end
@@ -156,10 +168,11 @@ defmodule AmpSdk.Stream do
       {:amp_sdk_transport, ref, {:error, error}} when ref == state.transport_ref ->
         normalized = Error.normalize(error, kind: :transport_error)
 
-        error_msg = %AmpSdk.Types.ErrorResultMessage{
-          error: "Transport error: #{normalized.message}",
-          is_error: true
-        }
+        error_msg =
+          build_error_result("Transport error: #{normalized.message}",
+            kind: :transport_error,
+            details: %{"cause" => inspect(normalized.cause)}
+          )
 
         {[error_msg], mark_done(state)}
 
@@ -171,10 +184,12 @@ defmodule AmpSdk.Stream do
         handle_transport_exit(reason, state)
     after
       state.receive_timeout_ms ->
-        timeout_error = %AmpSdk.Types.ErrorResultMessage{
-          error: "Timed out after #{state.receive_timeout_ms}ms waiting for CLI output",
-          is_error: true
-        }
+        timeout_error =
+          build_error_result(
+            "Timed out after #{state.receive_timeout_ms}ms waiting for CLI output",
+            kind: :stream_timeout,
+            details: %{"timeout_ms" => state.receive_timeout_ms}
+          )
 
         {[timeout_error], mark_done(state)}
     end
@@ -185,10 +200,13 @@ defmodule AmpSdk.Stream do
   end
 
   defp handle_transport_exit(reason, %State{} = state) do
+    stderr = normalize_stderr(state.stderr)
+    exit_code = decode_exit_code(reason)
+
     error_text =
       cond do
-        String.trim(state.stderr) != "" ->
-          String.trim(state.stderr)
+        stderr != "" ->
+          stderr
 
         reason == :normal ->
           "CLI process exited without producing output"
@@ -197,10 +215,25 @@ defmodule AmpSdk.Stream do
           "CLI process exited: #{inspect(reason)}"
       end
 
-    error_msg = %AmpSdk.Types.ErrorResultMessage{
-      error: error_text,
-      is_error: true
-    }
+    details =
+      %{
+        "kind" => "transport_exit",
+        "exit_code" => exit_code,
+        "stderr" => if(stderr == "", do: nil, else: stderr),
+        "stderr_truncated?" => state.stderr_truncated?,
+        "reason" => inspect(reason)
+      }
+      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
+      |> Map.new()
+
+    error_msg =
+      build_error_result(error_text,
+        kind: :transport_exit,
+        exit_code: exit_code,
+        stderr: if(stderr == "", do: nil, else: stderr),
+        stderr_truncated?: state.stderr_truncated?,
+        details: details
+      )
 
     {[error_msg], mark_done(state)}
   end
@@ -218,16 +251,28 @@ defmodule AmpSdk.Stream do
       {:error, reason} ->
         normalized = Error.normalize(reason, kind: :parse_error)
 
-        error_msg = %AmpSdk.Types.ErrorResultMessage{
-          error: "JSON parse error: #{normalized.message}",
-          is_error: true
-        }
+        error_msg =
+          build_error_result("JSON parse error: #{normalized.message}",
+            kind: :parse_error,
+            details: %{"line" => line}
+          )
 
         {[error_msg], mark_done(state)}
     end
   end
 
-  defp append_stderr(%State{} = state, data), do: %{state | stderr: state.stderr <> data}
+  defp append_stderr(%State{} = state, data) do
+    {stderr, truncated?} =
+      append_stderr_tail(
+        state.stderr,
+        data,
+        state.max_stderr_buffer_bytes,
+        state.stderr_truncated?
+      )
+
+    %{state | stderr: stderr, stderr_truncated?: truncated?}
+  end
+
   defp mark_done(%State{} = state), do: %{state | done?: true}
   defp mark_result_received(%State{} = state), do: %{state | received_result?: true, done?: true}
 
@@ -321,6 +366,55 @@ defmodule AmpSdk.Stream do
     File.rm_rf(dir)
   rescue
     _ -> :ok
+  end
+
+  defp resolve_max_stderr_buffer_bytes(%Options{max_stderr_buffer_bytes: max_bytes})
+       when is_integer(max_bytes) and max_bytes > 0,
+       do: max_bytes
+
+  defp resolve_max_stderr_buffer_bytes(_), do: AmpSdk.Defaults.stream_max_stderr_buffer_bytes()
+
+  defp append_stderr_tail(_existing, _data, max_size, _already_truncated?)
+       when not is_integer(max_size) or max_size <= 0,
+       do: {"", true}
+
+  defp append_stderr_tail(existing, data, max_size, already_truncated?) do
+    combined = existing <> data
+    combined_size = byte_size(combined)
+
+    if combined_size <= max_size do
+      {combined, already_truncated?}
+    else
+      {:binary.part(combined, combined_size - max_size, max_size), true}
+    end
+  end
+
+  defp normalize_stderr(stderr) when is_binary(stderr), do: String.trim(stderr)
+  defp normalize_stderr(_), do: ""
+
+  defp decode_exit_code(:normal), do: 0
+  defp decode_exit_code(0), do: 0
+
+  defp decode_exit_code({:exit_status, code}) when is_integer(code),
+    do: normalize_exit_status(code)
+
+  defp decode_exit_code({:status, code}) when is_integer(code), do: normalize_exit_status(code)
+  defp decode_exit_code(code) when is_integer(code), do: normalize_exit_status(code)
+  defp decode_exit_code(_reason), do: nil
+
+  defp normalize_exit_status(code) when code > 255 and rem(code, 256) == 0, do: div(code, 256)
+  defp normalize_exit_status(code), do: code
+
+  defp build_error_result(message, opts) do
+    %AmpSdk.Types.ErrorResultMessage{
+      error: message,
+      is_error: true,
+      kind: Keyword.get(opts, :kind),
+      details: Keyword.get(opts, :details),
+      exit_code: Keyword.get(opts, :exit_code),
+      stderr: Keyword.get(opts, :stderr),
+      stderr_truncated?: Keyword.get(opts, :stderr_truncated?, false)
+    }
   end
 
   @spec build_args(Options.t()) :: [String.t()]

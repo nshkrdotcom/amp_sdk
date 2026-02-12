@@ -34,7 +34,7 @@ Add `amp_sdk` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:amp_sdk, "~> 0.3.1"}
+    {:amp_sdk, "~> 0.4.0"}
   ]
 end
 ```
