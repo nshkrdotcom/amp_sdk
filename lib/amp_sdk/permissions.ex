@@ -19,16 +19,6 @@ defmodule AmpSdk.Permissions do
     end
   end
 
-  @spec list_raw(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
-  def list_raw(opts \\ []) when is_list(opts) do
-    args =
-      ["permissions", "list"]
-      |> maybe_append_flag(opts[:builtin], "--builtin")
-      |> maybe_append_flag(opts[:workspace], "--workspace")
-
-    CLIInvoke.invoke(args, opts)
-  end
-
   @spec test(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
   def test(tool_name, opts \\ []) when is_binary(tool_name) do
     args = ["permissions", "test", tool_name]
@@ -88,18 +78,17 @@ defmodule AmpSdk.Permissions do
   end
 
   defp parse_rule(rule) when is_map(rule) do
-    tool = fetch(rule, [:tool, "tool"])
-    action = fetch(rule, [:action, "action"])
+    tool = Map.get(rule, "tool")
+    action = Map.get(rule, "action")
 
     if is_binary(tool) and is_binary(action) do
       {:ok,
        %PermissionRule{
          tool: tool,
          action: action,
-         context: fetch(rule, [:context, "context"]),
-         to: fetch(rule, [:to, "to"]),
-         matches: fetch(rule, [:matches, "matches"]),
-         raw: rule
+         context: Map.get(rule, "context"),
+         to: Map.get(rule, "to"),
+         matches: Map.get(rule, "matches")
        }}
     else
       {:error,
@@ -115,15 +104,6 @@ defmodule AmpSdk.Permissions do
        context: %{reason: :non_map_entry, value: inspect(rule)}
      )}
   end
-
-  defp fetch(map, [key | rest]) do
-    case Map.fetch(map, key) do
-      {:ok, value} -> value
-      :error -> fetch(map, rest)
-    end
-  end
-
-  defp fetch(_map, []), do: nil
 
   defp maybe_append_flag(args, true, flag), do: args ++ [flag]
   defp maybe_append_flag(args, _value, _flag), do: args

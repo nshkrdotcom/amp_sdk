@@ -49,6 +49,5 @@ defmodule AmpSdk.CLIInvokeTest do
     assert Defaults.command_timeout_ms() == 60_000
     assert Defaults.cli_install_command() == "curl -fsSL https://ampcode.com/install.sh | bash"
     assert Defaults.cli_not_found_message() =~ Defaults.cli_install_command()
-    assert Defaults.legacy_cli_not_found_details() =~ Defaults.cli_install_command()
   end
 end

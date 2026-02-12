@@ -66,13 +66,8 @@ defmodule AmpSdk.Transport.Erlexec do
   end
 
   @impl AmpSdk.Transport
-  def subscribe(transport, pid) when is_pid(transport) and is_pid(pid) do
-    subscribe(transport, pid, :legacy)
-  end
-
-  @impl AmpSdk.Transport
   def subscribe(transport, pid, tag)
-      when is_pid(transport) and is_pid(pid) and (tag == :legacy or is_reference(tag)) do
+      when is_pid(transport) and is_pid(pid) and is_reference(tag) do
     case safe_call(transport, {:subscribe, pid, tag}) do
       {:ok, result} -> result
       {:error, reason} -> transport_error(reason)
@@ -361,7 +356,7 @@ defmodule AmpSdk.Transport.Erlexec do
   defp add_bootstrap_subscriber(state, nil), do: {:ok, state}
 
   defp add_bootstrap_subscriber(state, {pid, tag})
-       when is_pid(pid) and (tag == :legacy or is_reference(tag)) do
+       when is_pid(pid) and is_reference(tag) do
     {:ok, put_subscriber(state, pid, tag)}
   end
 
@@ -502,18 +497,6 @@ defmodule AmpSdk.Transport.Erlexec do
       dispatch_event(pid, info, event)
     end)
   end
-
-  defp dispatch_event(pid, %{tag: :legacy}, {:message, line}),
-    do: Kernel.send(pid, {:transport_message, line})
-
-  defp dispatch_event(pid, %{tag: :legacy}, {:error, reason}),
-    do: Kernel.send(pid, {:transport_error, reason})
-
-  defp dispatch_event(pid, %{tag: :legacy}, {:stderr, data}),
-    do: Kernel.send(pid, {:transport_stderr, data})
-
-  defp dispatch_event(pid, %{tag: :legacy}, {:exit, reason}),
-    do: Kernel.send(pid, {:transport_exit, reason})
 
   defp dispatch_event(pid, %{tag: ref}, event) when is_reference(ref),
     do: Kernel.send(pid, {:amp_sdk_transport, ref, event})

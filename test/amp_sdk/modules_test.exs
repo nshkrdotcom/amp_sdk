@@ -10,8 +10,6 @@ defmodule AmpSdk.ModulesTest do
      [
        {:list, 0},
        {:list, 1},
-       {:list_raw, 0},
-       {:list_raw, 1},
        {:test, 1},
        {:test, 2},
        {:add, 2},
@@ -23,8 +21,6 @@ defmodule AmpSdk.ModulesTest do
        {:add, 3},
        {:list, 0},
        {:list, 1},
-       {:list_raw, 0},
-       {:list_raw, 1},
        {:remove, 1},
        {:doctor, 0},
        {:approve, 1},
@@ -43,8 +39,6 @@ defmodule AmpSdk.ModulesTest do
        {:markdown, 1},
        {:list, 0},
        {:list, 1},
-       {:list_raw, 0},
-       {:list_raw, 1},
        {:search, 1},
        {:search, 2},
        {:share, 1},
@@ -89,8 +83,6 @@ defmodule AmpSdk.ModulesTest do
       {:skills_info, 1},
       {:mcp_list, 0},
       {:mcp_list, 1},
-      {:mcp_list_raw, 0},
-      {:mcp_list_raw, 1},
       {:mcp_remove, 1},
       {:mcp_doctor, 0},
       {:mcp_approve, 1},
@@ -102,8 +94,6 @@ defmodule AmpSdk.ModulesTest do
       {:mcp_oauth_status, 2},
       {:permissions_list, 0},
       {:permissions_list, 1},
-      {:permissions_list_raw, 0},
-      {:permissions_list_raw, 1},
       {:permissions_test, 1},
       {:permissions_add, 2},
       {:tasks_list, 0},
@@ -111,8 +101,6 @@ defmodule AmpSdk.ModulesTest do
       {:tasks_import, 2},
       {:threads_list, 0},
       {:threads_list, 1},
-      {:threads_list_raw, 0},
-      {:threads_list_raw, 1},
       {:threads_search, 1},
       {:threads_archive, 1},
       {:threads_share, 1},
@@ -130,6 +118,27 @@ defmodule AmpSdk.ModulesTest do
       test "#{fun}/#{arity} is delegated" do
         assert function_exported?(AmpSdk, unquote(fun), unquote(arity))
       end
+    end
+  end
+
+  describe "legacy API removal" do
+    test "raw list APIs are no longer exposed" do
+      refute function_exported?(AmpSdk, :threads_list_raw, 0)
+      refute function_exported?(AmpSdk, :threads_list_raw, 1)
+      refute function_exported?(AmpSdk, :permissions_list_raw, 0)
+      refute function_exported?(AmpSdk, :permissions_list_raw, 1)
+      refute function_exported?(AmpSdk, :mcp_list_raw, 0)
+      refute function_exported?(AmpSdk, :mcp_list_raw, 1)
+      refute function_exported?(AmpSdk.Threads, :list_raw, 0)
+      refute function_exported?(AmpSdk.Threads, :list_raw, 1)
+      refute function_exported?(AmpSdk.Permissions, :list_raw, 0)
+      refute function_exported?(AmpSdk.Permissions, :list_raw, 1)
+      refute function_exported?(AmpSdk.MCP, :list_raw, 0)
+      refute function_exported?(AmpSdk.MCP, :list_raw, 1)
+    end
+
+    test "legacy error module source is removed" do
+      refute File.exists?("lib/amp_sdk/errors.ex")
     end
   end
 end

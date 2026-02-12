@@ -47,8 +47,6 @@ defmodule AmpSdk do
   defdelegate threads_new(opts \\ []), to: AmpSdk.Threads, as: :new
   @spec threads_list(keyword()) :: {:ok, [AmpSdk.Types.ThreadSummary.t()]} | {:error, Error.t()}
   defdelegate threads_list(opts \\ []), to: AmpSdk.Threads, as: :list
-  @spec threads_list_raw(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
-  defdelegate threads_list_raw(opts \\ []), to: AmpSdk.Threads, as: :list_raw
   defdelegate threads_search(query, opts \\ []), to: AmpSdk.Threads, as: :search
   defdelegate threads_markdown(thread_id), to: AmpSdk.Threads, as: :markdown
   defdelegate threads_share(thread_id, opts \\ []), to: AmpSdk.Threads, as: :share
@@ -86,8 +84,6 @@ defmodule AmpSdk do
   @spec permissions_list(keyword()) ::
           {:ok, [AmpSdk.Types.PermissionRule.t()]} | {:error, Error.t()}
   defdelegate permissions_list(opts \\ []), to: AmpSdk.Permissions, as: :list
-  @spec permissions_list_raw(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
-  defdelegate permissions_list_raw(opts \\ []), to: AmpSdk.Permissions, as: :list_raw
   defdelegate permissions_test(tool_name, opts \\ []), to: AmpSdk.Permissions, as: :test
   defdelegate permissions_add(tool, action, opts \\ []), to: AmpSdk.Permissions, as: :add
 
@@ -96,8 +92,6 @@ defmodule AmpSdk do
   defdelegate mcp_add(name, command_or_url, opts \\ []), to: AmpSdk.MCP, as: :add
   @spec mcp_list(keyword()) :: {:ok, [AmpSdk.Types.MCPServer.t()]} | {:error, Error.t()}
   defdelegate mcp_list(opts \\ []), to: AmpSdk.MCP, as: :list
-  @spec mcp_list_raw(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
-  defdelegate mcp_list_raw(opts \\ []), to: AmpSdk.MCP, as: :list_raw
   defdelegate mcp_remove(name), to: AmpSdk.MCP, as: :remove
   defdelegate mcp_doctor(), to: AmpSdk.MCP, as: :doctor
   defdelegate mcp_approve(name), to: AmpSdk.MCP, as: :approve

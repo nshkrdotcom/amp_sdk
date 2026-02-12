@@ -42,13 +42,6 @@ Enum.each(threads, fn thread ->
 end)
 ```
 
-If you need raw plain-text CLI output, use:
-
-```elixir
-{:ok, output} = AmpSdk.threads_list_raw()
-IO.puts(output)
-```
-
 ## Searching Threads
 
 ```elixir
@@ -176,7 +169,6 @@ thread_id =
 |---|---|
 | `threads_new/1` | Create a new thread (opts: `visibility`) |
 | `threads_list/0` | List all threads as typed `%ThreadSummary{}` structs |
-| `threads_list_raw/0` | List all threads as raw CLI output |
 | `threads_search/2` | Search threads (opts: `limit`, `offset`, `json`) |
 | `threads_share/2` | Share a thread (opts: `visibility`, `support`) |
 | `threads_rename/2` | Rename a thread |

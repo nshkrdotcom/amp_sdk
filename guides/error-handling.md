@@ -23,13 +23,9 @@ Common `kind` values include `:cli_not_found`, `:command_timeout`, `:task_timeou
 
 ## Exception Types
 
-These can still be raised in explicit bang APIs or direct constructor usage:
+`AmpSdk.Error` can be raised in explicit bang APIs or direct constructor usage:
 
 - `AmpSdk.Error` (primary exception envelope)
-- `AmpSdk.Errors.CLINotFoundError` (legacy)
-- `AmpSdk.Errors.ProcessError` (legacy)
-- `AmpSdk.Errors.JSONParseError` (legacy)
-- `AmpSdk.Errors.AmpError`
 
 Use tuple returns where possible and pattern-match on `%AmpSdk.Error{}` in application code.
 

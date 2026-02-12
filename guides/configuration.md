@@ -71,10 +71,10 @@ Pass MCP server configs as a map:
 
 ```elixir
 mcp = %{
-  "filesystem" => %{
-    "command" => "npx",
-    "args" => ["-y", "@modelcontextprotocol/server-filesystem"],
-    "env" => %{}
+  filesystem: %{
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem"],
+    env: %{}
   }
 }
 
@@ -122,14 +122,14 @@ These default to `false`. Set to `true` for headless/CI environments.
 
 ## Option Key Normalization
 
-When building MCP structs from maps/keywords, avoid mixing atom and string forms of the same key with different values.
+When building MCP structs from maps/keywords, use atom keys for option fields.
 
 ```elixir
-# Invalid: conflicting values for the same key
-AmpSdk.Types.MCPStdioServer.new(%{command: "npx", "command" => "node"})
+# Valid: atom keys
+AmpSdk.Types.MCPStdioServer.new(%{command: "npx", args: ["-y", "tool"]})
 ```
 
-Conflicts are rejected with `{:error, %AmpSdk.Error{kind: :invalid_configuration}}` to prevent ambiguous configuration.
+String keys are ignored by these constructors. If you already have JSON-style string keys, pass `Options.mcp_config` as a JSON string instead of a map.
 
 For MCP constructors, `nil` values inside `env` and `headers` maps are dropped during normalization.
 
@@ -155,9 +155,6 @@ The SDK locates the Amp CLI by checking (in order):
 2. `~/.amp/bin/amp`
 3. `~/.local/bin/amp`
 4. System `PATH`
-5. Node.js `require.resolve('@sourcegraph/amp/package.json')`
-
-The Node.js `require.resolve` probe is bounded by a `2_000ms` timeout to prevent indefinite hangs in misconfigured Node environments.
 
 Use `AmpSdk.CLI.resolve/0` to inspect the command spec:
 

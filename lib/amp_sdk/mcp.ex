@@ -38,11 +38,6 @@ defmodule AmpSdk.MCP do
     end
   end
 
-  @spec list_raw(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
-  def list_raw(opts \\ []) when is_list(opts) do
-    CLIInvoke.invoke(["mcp", "list"], opts)
-  end
-
   @spec remove(String.t()) :: {:ok, String.t()} | {:error, Error.t()}
   def remove(name) when is_binary(name) do
     CLIInvoke.invoke(["mcp", "remove", name])
@@ -140,19 +135,18 @@ defmodule AmpSdk.MCP do
   end
 
   defp parse_server(server) when is_map(server) do
-    name = fetch(server, [:name, "name"]) || "unknown"
-    type = fetch(server, [:type, "type"]) || "unknown"
-    source = fetch(server, [:source, "source"]) || "unknown"
+    name = Map.get(server, "name") || "unknown"
+    type = Map.get(server, "type") || "unknown"
+    source = Map.get(server, "source") || "unknown"
 
     {:ok,
      %MCPServer{
        name: to_string(name),
        type: to_string(type),
        source: to_string(source),
-       command: normalize_optional_string(fetch(server, [:command, "command"])),
-       args: normalize_args(fetch(server, [:args, "args"])),
-       url: normalize_optional_string(fetch(server, [:url, "url"])),
-       raw: server
+       command: normalize_optional_string(Map.get(server, "command")),
+       args: normalize_args(Map.get(server, "args")),
+       url: normalize_optional_string(Map.get(server, "url"))
      }}
   end
 
@@ -162,15 +156,6 @@ defmodule AmpSdk.MCP do
        context: %{reason: :non_map_entry, value: inspect(server)}
      )}
   end
-
-  defp fetch(map, [key | rest]) do
-    case Map.fetch(map, key) do
-      {:ok, value} -> value
-      :error -> fetch(map, rest)
-    end
-  end
-
-  defp fetch(_map, []), do: nil
 
   defp normalize_optional_string(nil), do: nil
   defp normalize_optional_string(value), do: to_string(value)

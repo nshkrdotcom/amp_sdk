@@ -1,7 +1,7 @@
 defmodule AmpSdk.MixProject do
   use Mix.Project
 
-  @version "0.2.0"
+  @version "0.3.0"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
 
   def project do
@@ -138,12 +138,7 @@ defmodule AmpSdk.MixProject do
           AmpSdk.Types.MCPHttpServer
         ],
         Infrastructure: [
-          AmpSdk.CLI,
-          AmpSdk.Errors,
-          AmpSdk.Errors.AmpError,
-          AmpSdk.Errors.CLINotFoundError,
-          AmpSdk.Errors.ProcessError,
-          AmpSdk.Errors.JSONParseError
+          AmpSdk.CLI
         ]
       ],
       before_closing_head_tag: &before_closing_head_tag/1,

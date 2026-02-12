@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-11
+
+### Removed
+
+- Legacy exception module `AmpSdk.Errors` and its specialized exception types.
+- Legacy defaults/accessors tied to removed exceptions.
+- Legacy transport subscription shape (`:legacy` tag + `subscribe/2`) in favor of reference-tagged transport events only.
+- Raw management list APIs:
+  - `AmpSdk.threads_list_raw` (arity 1)
+  - `AmpSdk.permissions_list_raw` (arity 1)
+  - `AmpSdk.mcp_list_raw` (arity 1)
+  - `AmpSdk.Threads.list_raw` (arity 1)
+  - `AmpSdk.Permissions.list_raw` (arity 1)
+  - `AmpSdk.MCP.list_raw` (arity 1)
+- Management struct passthrough `raw` fields:
+  - `AmpSdk.Types.ThreadSummary.raw`
+  - `AmpSdk.Types.PermissionRule.raw`
+  - `AmpSdk.Types.MCPServer.raw`
+- Legacy Node.js `require.resolve` CLI discovery fallback and probe-timeout default.
+
+### Changed
+
+- `AmpSdk.Config.fetch_option` (arity 3) and `read_option` (arity 3) now read atom keys only for map inputs.
+- MCP constructor map/keyword inputs now expect atom keys for options; string keys in those maps are ignored.
+- Permissions and MCP typed list parsing now uses direct string-key access from decoded CLI JSON.
+- Docs/guides/examples now reflect strict typed APIs and legacy removals.
+
 ## [0.2.0] - 2026-02-07
 
 ### Added
@@ -14,9 +41,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `AmpSdk.Types.PermissionRule`
   - `AmpSdk.Types.MCPServer`
 - Raw output accessors for callers that still need plain CLI output:
-  - `AmpSdk.threads_list_raw/1`
-  - `AmpSdk.permissions_list_raw/1`
-  - `AmpSdk.mcp_list_raw/1`
+  - `AmpSdk.threads_list_raw` (arity 1)
+  - `AmpSdk.permissions_list_raw` (arity 1)
+  - `AmpSdk.mcp_list_raw` (arity 1)
 
 ### Changed
 

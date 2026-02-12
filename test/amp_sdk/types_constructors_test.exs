@@ -28,16 +28,12 @@ defmodule AmpSdk.TypesConstructorsTest do
              MCPHttpServer.new(url: "https://example.com")
   end
 
-  test "MCP constructors reject conflicting atom and string keys" do
-    assert {:error, %Error{kind: :invalid_configuration, message: message}} =
+  test "MCP constructors read atom keys and ignore string-key duplicates" do
+    assert {:ok, %MCPStdioServer{command: "npx"}} =
              MCPStdioServer.new(%{:command => "npx", "command" => "node"})
 
-    assert message =~ "conflicting values"
-
-    assert {:error, %Error{kind: :invalid_configuration, message: message}} =
+    assert {:ok, %MCPHttpServer{url: "https://a.example"}} =
              MCPHttpServer.new(%{:url => "https://a.example", "url" => "https://b.example"})
-
-    assert message =~ "conflicting values"
   end
 
   test "MCP constructors drop nil env/header values" do

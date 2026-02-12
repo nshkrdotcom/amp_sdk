@@ -31,7 +31,7 @@ Or set the `AMP_API_KEY` environment variable.
 # mix.exs
 def deps do
   [
-    {:amp_sdk, "~> 0.2.0"}
+    {:amp_sdk, "~> 0.3.0"}
   ]
 end
 ```
@@ -94,6 +94,6 @@ See the [Configuration](configuration.md) guide for all available options.
 - [Streaming](streaming.md) — real-time output and message types
 - [Permissions](permissions.md) — control which tools Amp can use
 - [Threads](threads.md) — multi-turn conversations and thread management
-- [Error Handling](error-handling.md) — exception types and recovery patterns
+- [Error Handling](error-handling.md) — error kinds and recovery patterns
 - [Testing](testing.md) — testing strategies for SDK-dependent code
 - [Tools & Management](tools-and-management.md) — tools, tasks, review, skills, MCP, usage

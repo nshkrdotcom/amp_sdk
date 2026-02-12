@@ -86,22 +86,12 @@ defmodule AmpSdk.ManagementTypedTest do
         assert first.last_updated == "2m ago"
         assert first.visibility == :workspace
         assert first.messages == 4
+        refute Map.has_key?(first, :raw)
 
         assert second.id == "T-11111111-2222-3333-4444-555555555555"
         assert second.visibility == :private
+        refute Map.has_key?(second, :raw)
 
-        assert read_args!(args_file) == ["threads", "list"]
-      end,
-      %{"AMP_TEST_OUTPUT" => output}
-    )
-  end
-
-  test "threads_list_raw preserves legacy string output" do
-    output = "Title Last Updated Visibility Messages Thread ID"
-
-    with_cli_stub(
-      fn args_file, _stdin_file ->
-        assert {:ok, ^output} = AmpSdk.threads_list_raw()
         assert read_args!(args_file) == ["threads", "list"]
       end,
       %{"AMP_TEST_OUTPUT" => output}
@@ -139,23 +129,13 @@ defmodule AmpSdk.ManagementTypedTest do
 
         assert first.tool == "Read"
         assert first.action == "allow"
+        refute Map.has_key?(first, :raw)
         assert second.tool == "Bash"
         assert second.action == "ask"
         assert second.context == "workspace"
+        refute Map.has_key?(second, :raw)
 
         assert read_args!(args_file) == ["permissions", "list", "--json"]
-      end,
-      %{"AMP_TEST_OUTPUT" => output}
-    )
-  end
-
-  test "permissions_list_raw preserves legacy string output without json flag" do
-    output = "allow Read\nask Bash"
-
-    with_cli_stub(
-      fn args_file, _stdin_file ->
-        assert {:ok, ^output} = AmpSdk.permissions_list_raw()
-        assert read_args!(args_file) == ["permissions", "list"]
       end,
       %{"AMP_TEST_OUTPUT" => output}
     )
@@ -188,24 +168,14 @@ defmodule AmpSdk.ManagementTypedTest do
         assert first.source == "workspace"
         assert first.command == "npx"
         assert first.args == ["-y", "@modelcontextprotocol/server-filesystem"]
+        refute Map.has_key?(first, :raw)
 
         assert second.name == "remote"
         assert second.type == "url"
         assert second.url == "https://example.com/mcp"
+        refute Map.has_key?(second, :raw)
 
         assert read_args!(args_file) == ["mcp", "list", "--json"]
-      end,
-      %{"AMP_TEST_OUTPUT" => output}
-    )
-  end
-
-  test "mcp_list_raw preserves legacy string output without json flag" do
-    output = "No MCP servers configured."
-
-    with_cli_stub(
-      fn args_file, _stdin_file ->
-        assert {:ok, ^output} = AmpSdk.mcp_list_raw()
-        assert read_args!(args_file) == ["mcp", "list"]
       end,
       %{"AMP_TEST_OUTPUT" => output}
     )

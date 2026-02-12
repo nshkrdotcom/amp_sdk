@@ -3,7 +3,7 @@ defmodule AmpSdk.CLI do
 
   import Bitwise
 
-  alias AmpSdk.{Defaults, Error, TaskSupport}
+  alias AmpSdk.{Defaults, Error}
 
   defmodule CommandSpec do
     @moduledoc "Executable command configuration for invoking the Amp CLI."
@@ -23,8 +23,7 @@ defmodule AmpSdk.CLI do
   def resolve do
     with :error <- check_env_var(),
          :error <- check_binary_paths(),
-         :error <- check_path(),
-         :error <- check_node_resolve() do
+         :error <- check_path() do
       {:error,
        Error.new(
          :cli_not_found,
@@ -90,54 +89,6 @@ defmodule AmpSdk.CLI do
     case System.find_executable("amp") do
       nil -> :error
       path -> {:ok, %CommandSpec{program: path, argv_prefix: []}}
-    end
-  end
-
-  defp check_node_resolve do
-    with node when is_binary(node) <- System.find_executable("node"),
-         {output, 0} <- run_node_probe(node),
-         result <- resolve_node_package(String.trim(output), node),
-         {:ok, _spec} <- result do
-      result
-    else
-      _ -> :error
-    end
-  rescue
-    _error in [File.Error, Jason.DecodeError, ErlangError] -> :error
-  end
-
-  defp run_node_probe(node) do
-    case TaskSupport.async_nolink(fn ->
-           System.cmd(node, ["-p", "require.resolve('@sourcegraph/amp/package.json')"],
-             stderr_to_stdout: true
-           )
-         end) do
-      {:ok, task} ->
-        case Task.yield(task, Defaults.cli_node_probe_timeout_ms()) ||
-               Task.shutdown(task, :brutal_kill) do
-          {:ok, {output, status}} when is_binary(output) and is_integer(status) ->
-            {output, status}
-
-          _ ->
-            :error
-        end
-
-      {:error, _reason} ->
-        :error
-    end
-  end
-
-  defp resolve_node_package(package_json_path, node_path) do
-    package_dir = Path.dirname(package_json_path)
-
-    with {:ok, content} <- File.read(package_json_path),
-         {:ok, data} <- Jason.decode(content),
-         %{"bin" => %{"amp" => bin_path}} <- data,
-         full_bin = Path.join(package_dir, bin_path),
-         true <- File.regular?(full_bin) do
-      resolve_cli_path(full_bin, node_path)
-    else
-      _ -> :error
     end
   end
 

@@ -4,7 +4,7 @@ defmodule AmpSdk.Types.ThreadSummary do
   """
 
   @enforce_keys [:id, :title, :last_updated, :visibility, :messages]
-  defstruct [:id, :title, :last_updated, :visibility, :messages, :raw]
+  defstruct [:id, :title, :last_updated, :visibility, :messages]
 
   @type visibility :: :private | :public | :workspace | :group | :unknown
 
@@ -13,8 +13,7 @@ defmodule AmpSdk.Types.ThreadSummary do
           title: String.t(),
           last_updated: String.t(),
           visibility: visibility(),
-          messages: non_neg_integer(),
-          raw: String.t() | nil
+          messages: non_neg_integer()
         }
 end
 
@@ -24,15 +23,14 @@ defmodule AmpSdk.Types.PermissionRule do
   """
 
   @enforce_keys [:tool, :action]
-  defstruct [:tool, :action, :context, :to, :matches, :raw]
+  defstruct [:tool, :action, :context, :to, :matches]
 
   @type t :: %__MODULE__{
           tool: String.t(),
           action: String.t(),
           context: String.t() | nil,
           to: String.t() | nil,
-          matches: map() | nil,
-          raw: map() | nil
+          matches: map() | nil
         }
 end
 
@@ -42,7 +40,7 @@ defmodule AmpSdk.Types.MCPServer do
   """
 
   @enforce_keys [:name, :type, :source]
-  defstruct [:name, :type, :source, :command, :args, :url, :raw]
+  defstruct [:name, :type, :source, :command, :args, :url]
 
   @type t :: %__MODULE__{
           name: String.t(),
@@ -50,7 +48,6 @@ defmodule AmpSdk.Types.MCPServer do
           source: String.t(),
           command: String.t() | nil,
           args: [String.t()],
-          url: String.t() | nil,
-          raw: map() | nil
+          url: String.t() | nil
         }
 end

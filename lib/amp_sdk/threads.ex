@@ -29,11 +29,6 @@ defmodule AmpSdk.Threads do
     end
   end
 
-  @spec list_raw(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
-  def list_raw(opts \\ []) when is_list(opts) do
-    CLIInvoke.invoke(["threads", "list"], opts)
-  end
-
   @spec search(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
   def search(query, opts \\ []) when is_binary(query) do
     args = ["threads", "search", query]
@@ -195,8 +190,7 @@ defmodule AmpSdk.Threads do
            title: String.trim(title),
            last_updated: String.trim(last_updated),
            visibility: parse_visibility(visibility),
-           messages: String.to_integer(messages),
-           raw: row
+           messages: String.to_integer(messages)
          }}
 
       _ ->

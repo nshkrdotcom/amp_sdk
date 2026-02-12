@@ -34,7 +34,7 @@ Add `amp_sdk` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:amp_sdk, "~> 0.2.0"}
+    {:amp_sdk, "~> 0.3.0"}
   ]
 end
 ```
@@ -93,7 +93,6 @@ The SDK locates the Amp CLI automatically by checking, in order:
 | 2 | `~/.amp/bin/amp` | Official binary install location |
 | 3 | `~/.local/bin/amp` | Symlink from install script |
 | 4 | System `PATH` | Standard executable lookup |
-| 5 | Node.js `require.resolve` | Legacy npm global install (probe timeout: `2_000ms`) |
 
 ---
 
@@ -229,14 +228,6 @@ Management list functions return typed data for programmatic use:
 {:ok, servers} = AmpSdk.mcp_list()
 ```
 
-If you need raw CLI text output, use:
-
-```elixir
-{:ok, thread_output} = AmpSdk.threads_list_raw()
-{:ok, permission_output} = AmpSdk.permissions_list_raw()
-{:ok, mcp_output} = AmpSdk.mcp_list_raw()
-```
-
 ---
 
 ## Configuration Options
@@ -340,10 +331,10 @@ alias AmpSdk.Types.Options
 
 # Stdio-based MCP server
 mcp_config = %{
-  "filesystem" => %{
-    "command" => "npx",
-    "args" => ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
-    "env" => %{}
+  filesystem: %{
+    command: "npx",
+    args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+    env: %{}
   }
 }
 
@@ -353,9 +344,9 @@ mcp_config = %{
 
 # HTTP-based MCP server
 mcp_config = %{
-  "remote-api" => %{
-    "url" => "https://api.example.com/mcp",
-    "headers" => %{"Authorization" => "Bearer token"}
+  remote_api: %{
+    url: "https://api.example.com/mcp",
+    headers: %{"Authorization" => "Bearer token"}
   }
 }
 ```
@@ -539,7 +530,6 @@ Execution failed or hit max turns.
 | `AmpSdk.Types.PermissionRule` | Typed permission list entries from `permissions_list/1` |
 | `AmpSdk.Types.MCPServer` | Typed MCP list entries from `mcp_list/1` |
 | `AmpSdk.Error` | Unified error envelope used by tuple-based APIs |
-| `AmpSdk.Errors` | Legacy/specialized exception types: `AmpError`, `CLINotFoundError`, `ProcessError`, `JSONParseError` |
 
 ---
 
@@ -559,8 +549,6 @@ case AmpSdk.run("do something") do
     IO.puts("#{kind}: #{message}")
 end
 ```
-
-Exceptional conditions (for example invalid settings JSON) can still raise typed errors such as `AmpSdk.Errors.AmpError`.
 
 Internal timeout/task helpers also normalize into `%AmpSdk.Error{}` kinds (for example `:task_timeout`).
 
@@ -602,7 +590,7 @@ AmpSdk.run("check env", %Options{env: %{"MY_VAR" => "value"}})
 
 `nil` values in `Options.env` and MCP constructor maps (`env`, `headers`) are dropped during normalization.
 
-For MCP config constructors, conflicting atom/string versions of the same key are rejected as `:invalid_configuration` to avoid ambiguous input maps.
+For MCP config constructors that take maps/keywords, use atom keys. String keys are ignored by those constructors.
 
 ---
 
@@ -734,7 +722,7 @@ Full API documentation is available on [HexDocs](https://hexdocs.pm/amp_sdk).
 - [Streaming](guides/streaming.md) — message types, real-time output patterns
 - [Permissions](guides/permissions.md) — tool access control and safety
 - [Threads](guides/threads.md) — multi-turn conversations and thread management
-- [Error Handling](guides/error-handling.md) — exception types and recovery
+- [Error Handling](guides/error-handling.md) — error kinds and recovery
 - [Testing](guides/testing.md) — unit and integration testing strategies
 
 ### Examples
