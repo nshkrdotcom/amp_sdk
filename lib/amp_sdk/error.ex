@@ -42,6 +42,8 @@ defmodule AmpSdk.Error do
           | {:context, map() | keyword() | nil}
           | {:exit_code, integer() | nil}
 
+  alias CliSubprocessCore.Transport.Error, as: CoreTransportError
+
   @spec new(kind(), String.t(), [normalize_opt()]) :: t()
   def new(kind, message, opts \\ []) when is_atom(kind) and is_binary(message) do
     %__MODULE__{
@@ -114,6 +116,18 @@ defmodule AmpSdk.Error do
     )
   end
 
+  def normalize(%CoreTransportError{} = error, opts) do
+    kind = Keyword.get(opts, :kind, :transport_error)
+    message = Keyword.get(opts, :message, error.message)
+
+    new(kind, message,
+      cause: Keyword.get(opts, :cause, error),
+      details: Keyword.get(opts, :details),
+      context: Map.merge(error.context, normalize_context(Keyword.get(opts, :context))),
+      exit_code: Keyword.get(opts, :exit_code)
+    )
+  end
+
   def normalize({:task_exit, reason} = tagged_reason, opts) do
     kind = Keyword.get(opts, :kind, :task_exit)
     message = Keyword.get(opts, :message, "Task exited: #{inspect(reason)}")
@@ -154,5 +168,6 @@ defmodule AmpSdk.Error do
   defp normalize_exit_code(_), do: nil
 
   defp transport_reason_message(:not_connected), do: "Transport not connected"
+  defp transport_reason_message(%CoreTransportError{} = error), do: error.message
   defp transport_reason_message(reason), do: "Transport error: #{inspect(reason)}"
 end

@@ -3,6 +3,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
 
   alias AmpSdk.TestSupport
   alias AmpSdk.Transport.Erlexec
+  alias CliSubprocessCore.LineFraming
 
   defp sh_path do
     System.find_executable("sh") || "sh"
@@ -271,7 +272,12 @@ defmodule AmpSdk.Transport.ErlexecTest do
         end)
 
       :sys.replace_state(transport, fn current ->
-        %{current | pending_lines: pending_lines, stdout_buffer: "", drain_scheduled?: false}
+        %{
+          current
+          | pending_lines: pending_lines,
+            stdout_framer: %LineFraming{},
+            drain_scheduled?: false
+        }
       end)
 
       send(transport, {:finalize_exit, os_pid, pid, :normal})

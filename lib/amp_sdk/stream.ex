@@ -1,40 +1,51 @@
 defmodule AmpSdk.Stream do
   @moduledoc "Manages streaming execution of the Amp CLI."
 
-  alias AmpSdk.{CLI, Env, Error, ProcessSupport, Types, Util}
-  alias AmpSdk.Transport.Erlexec
+  alias AmpSdk.{Error, Runtime.CLI, Types}
   alias AmpSdk.Types.Options
+  alias CliSubprocessCore.Event, as: CoreEvent
 
-  @transport_close_grace_ms 2_000
+  @runtime_event_tag :cli_subprocess_core_session
+  @session_close_grace_ms 2_000
+  @session_kill_grace_ms 250
 
   @type execute_input :: String.t() | [Types.UserInputMessage.t() | map()]
 
   defmodule State do
     @moduledoc false
+
     @default_receive_timeout_ms AmpSdk.Defaults.stream_timeout_ms()
     @default_max_stderr_buffer_bytes AmpSdk.Defaults.stream_max_stderr_buffer_bytes()
 
-    @enforce_keys [:transport, :transport_ref, :receive_timeout_ms]
-    defstruct transport: nil,
-              transport_ref: nil,
+    @enforce_keys [
+      :session,
+      :session_ref,
+      :session_monitor_ref,
+      :projection_state,
+      :receive_timeout_ms
+    ]
+    defstruct session: nil,
+              session_ref: nil,
+              session_monitor_ref: nil,
+              projection_state: nil,
               done?: false,
-              received_result?: false,
               temp_dir: nil,
               stderr: "",
               stderr_truncated?: false,
-              max_stderr_buffer_bytes: @default_max_stderr_buffer_bytes,
-              receive_timeout_ms: @default_receive_timeout_ms
+              receive_timeout_ms: @default_receive_timeout_ms,
+              max_stderr_buffer_bytes: @default_max_stderr_buffer_bytes
 
     @type t :: %__MODULE__{
-            transport: pid(),
-            transport_ref: reference(),
+            session: pid(),
+            session_ref: reference(),
+            session_monitor_ref: reference(),
+            projection_state: map(),
             done?: boolean(),
-            received_result?: boolean(),
             temp_dir: String.t() | nil,
             stderr: String.t(),
             stderr_truncated?: boolean(),
-            max_stderr_buffer_bytes: pos_integer(),
-            receive_timeout_ms: pos_integer()
+            receive_timeout_ms: pos_integer(),
+            max_stderr_buffer_bytes: pos_integer()
           }
   end
 
@@ -49,111 +60,83 @@ defmodule AmpSdk.Stream do
   end
 
   defp start(input, %Options{} = options) do
-    input_mode = input_mode(input)
+    session_ref = make_ref()
 
-    try do
-      with {:ok, command} <- CLI.resolve(),
-           {:ok, args} <- {:ok, build_args(options, input_mode)},
-           {:ok, settings_path, temp_dir} <- build_settings_file(options) do
-        args = maybe_add_settings(args, settings_path)
-        full_args = CLI.command_args(command, args)
-        env = build_env(options)
-        cwd = options.cwd || File.cwd!()
-        transport_ref = make_ref()
-        max_stderr_buffer_bytes = resolve_max_stderr_buffer_bytes(options)
-        transport_stderr_cap = max_stderr_buffer_bytes + 1
+    case CLI.start_session(input: input, options: options, subscriber: {self(), session_ref}) do
+      {:ok, session, %{projection_state: projection_state, temp_dir: temp_dir}} ->
+        init_session(
+          session,
+          session_ref,
+          projection_state,
+          temp_dir,
+          input,
+          options.stream_timeout_ms,
+          options.max_stderr_buffer_bytes
+        )
 
-        case Erlexec.start(
-               command: command.program,
-               args: full_args,
-               cwd: cwd,
-               env: Enum.to_list(env),
-               subscriber: {self(), transport_ref},
-               max_stderr_buffer_size: transport_stderr_cap
-             ) do
-          {:ok, transport} ->
-            case send_initial_input(transport, input) do
-              :ok ->
-                %State{
-                  transport: transport,
-                  transport_ref: transport_ref,
-                  temp_dir: temp_dir,
-                  max_stderr_buffer_bytes: max_stderr_buffer_bytes,
-                  receive_timeout_ms: options.stream_timeout_ms
-                }
+      {:error, reason} ->
+        {:error, Error.normalize(reason, kind: :stream_start_failed)}
+    end
+  rescue
+    error ->
+      {:error, Error.normalize(error, kind: :stream_start_failed)}
+  catch
+    :exit, reason ->
+      {:error, Error.normalize(reason, kind: :stream_start_failed)}
+  end
 
-              {:error, reason} ->
-                cleanup_start_resources(transport, temp_dir)
-                {:error, Error.normalize(reason, kind: :stream_start_failed)}
-            end
+  defp init_session(
+         session,
+         session_ref,
+         projection_state,
+         temp_dir,
+         input,
+         timeout_ms,
+         max_stderr_buffer_bytes
+       ) do
+    session_monitor_ref = Process.monitor(session)
 
-          {:error, reason} ->
-            cleanup_temp_dir(temp_dir)
-            {:error, Error.normalize(reason, kind: :stream_start_failed)}
-        end
-      else
-        {:error, reason} ->
-          {:error, Error.normalize(reason, kind: :stream_start_failed)}
-      end
-    rescue
-      error ->
-        {:error, Error.normalize(error, kind: :stream_start_failed)}
-    catch
-      :exit, reason ->
+    with :ok <- send_initial_input(session, input),
+         :ok <- end_input(session) do
+      %State{
+        session: session,
+        session_ref: session_ref,
+        session_monitor_ref: session_monitor_ref,
+        projection_state: projection_state,
+        temp_dir: temp_dir,
+        receive_timeout_ms: timeout_ms,
+        max_stderr_buffer_bytes: max_stderr_buffer_bytes
+      }
+    else
+      {:error, reason} ->
+        _ = CLI.close(session)
+        cleanup_temp_dir(temp_dir)
         {:error, Error.normalize(reason, kind: :stream_start_failed)}
     end
   end
 
-  defp input_mode(input) when is_binary(input), do: :prompt
-  defp input_mode(input) when is_list(input), do: :json_input
-
-  defp send_initial_input(transport, input) do
-    send_input(transport, input)
+  defp send_initial_input(session, input) do
+    CLI.send_input(session, input)
   catch
     :exit, reason ->
       {:error, {:transport_call_exit, reason}}
   end
 
-  defp cleanup_start_resources(transport, temp_dir) do
-    safe_close(transport)
-    cleanup_temp_dir(temp_dir)
-  end
-
-  defp send_input(transport, prompt) when is_binary(prompt) do
-    with :ok <- Erlexec.send(transport, prompt),
-         :ok <- Erlexec.end_input(transport) do
-      :ok
-    end
-  end
-
-  defp send_input(_transport, []), do: {:error, :empty_input_messages}
-
-  defp send_input(transport, messages) when is_list(messages) do
-    with :ok <- send_messages(transport, messages),
-         :ok <- Erlexec.end_input(transport) do
-      :ok
-    end
-  end
-
-  defp send_messages(transport, messages) do
-    Enum.reduce_while(messages, :ok, fn message, _acc ->
-      case Erlexec.send(transport, message) do
-        :ok -> {:cont, :ok}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
+  defp end_input(session) do
+    CLI.end_input(session)
+  catch
+    :exit, reason ->
+      {:error, {:transport_call_exit, reason}}
   end
 
   defp receive_next({:error, reason}) do
-    normalized = Error.normalize(reason, kind: :stream_start_failed)
-
-    error_msg =
-      build_error_result("Failed to start: #{normalized.message}",
+    error_message =
+      build_error_result("Failed to start: #{Error.message(reason)}",
         kind: :stream_start_failed,
-        details: %{"cause" => inspect(normalized.cause)}
+        details: %{"cause" => inspect(reason)}
       )
 
-    {[error_msg], {:halted}}
+    {[error_message], {:halted}}
   end
 
   defp receive_next({:halted}), do: {:halt, {:halted}}
@@ -161,218 +144,107 @@ defmodule AmpSdk.Stream do
 
   defp receive_next(%State{} = state) do
     receive do
-      {:amp_sdk_transport, ref, {:message, line}}
-      when ref == state.transport_ref and is_binary(line) ->
-        handle_line(line, state)
+      {@runtime_event_tag, ref, {:event, %CoreEvent{} = event}}
+      when ref == state.session_ref ->
+        handle_core_event(event, state)
 
-      {:amp_sdk_transport, ref, {:error, error}} when ref == state.transport_ref ->
-        normalized = Error.normalize(error, kind: :transport_error)
-
-        error_msg =
-          build_error_result("Transport error: #{normalized.message}",
-            kind: :transport_error,
-            details: %{"cause" => inspect(normalized.cause)}
-          )
-
-        {[error_msg], mark_done(state)}
-
-      {:amp_sdk_transport, ref, {:stderr, data}}
-      when ref == state.transport_ref and is_binary(data) ->
-        receive_next(append_stderr(state, data))
-
-      {:amp_sdk_transport, ref, {:exit, reason}} when ref == state.transport_ref ->
-        handle_transport_exit(reason, state)
+      {:DOWN, monitor_ref, :process, _pid, _reason}
+      when monitor_ref == state.session_monitor_ref ->
+        {:halt, mark_done(state)}
     after
       state.receive_timeout_ms ->
         timeout_error =
           build_error_result(
             "Timed out after #{state.receive_timeout_ms}ms waiting for CLI output",
             kind: :stream_timeout,
-            details: %{"timeout_ms" => state.receive_timeout_ms}
+            details: %{"timeout_ms" => state.receive_timeout_ms},
+            stderr: normalize_stderr(state.stderr),
+            stderr_truncated?: state.stderr_truncated?
           )
 
         {[timeout_error], mark_done(state)}
     end
   end
 
-  defp handle_transport_exit(_reason, %State{received_result?: true} = state) do
-    {:halt, mark_done(state)}
-  end
+  defp handle_core_event(event, %State{} = state) do
+    state = maybe_capture_stderr(state, event)
 
-  defp handle_transport_exit(reason, %State{} = state) do
-    stderr = normalize_stderr(state.stderr)
-    exit_code = decode_exit_code(reason)
+    {projected, projection_state} = CLI.project_event(event, state.projection_state)
+    state = %{state | projection_state: projection_state}
 
-    error_text =
-      cond do
-        stderr != "" ->
-          stderr
+    projected =
+      Enum.map(projected, fn message ->
+        maybe_attach_stderr(message, state)
+      end)
 
-        reason == :normal ->
-          "CLI process exited without producing output"
+    case projected do
+      [] ->
+        receive_next(state)
 
-        true ->
-          "CLI process exited: #{inspect(reason)}"
-      end
-
-    details =
-      %{
-        "kind" => "transport_exit",
-        "exit_code" => exit_code,
-        "stderr" => if(stderr == "", do: nil, else: stderr),
-        "stderr_truncated?" => state.stderr_truncated?,
-        "reason" => inspect(reason)
-      }
-      |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-      |> Map.new()
-
-    error_msg =
-      build_error_result(error_text,
-        kind: :transport_exit,
-        exit_code: exit_code,
-        stderr: if(stderr == "", do: nil, else: stderr),
-        stderr_truncated?: state.stderr_truncated?,
-        details: details
-      )
-
-    {[error_msg], mark_done(state)}
-  end
-
-  defp handle_line(line, %State{} = state) do
-    case Types.parse_stream_message(line) do
-      {:ok, message} ->
+      messages ->
         state =
-          if Types.final_message?(message),
-            do: mark_result_received(state),
-            else: state
+          if Enum.any?(messages, &Types.final_message?/1) do
+            mark_done(state)
+          else
+            state
+          end
 
-        {[message], state}
+        {messages, state}
+    end
+  end
 
-      {:error, reason} ->
-        normalized = Error.normalize(reason, kind: :parse_error)
-
-        error_msg =
-          build_error_result("JSON parse error: #{normalized.message}",
-            kind: :parse_error,
-            details: %{"line" => line}
+  defp maybe_capture_stderr(%State{} = state, %CoreEvent{} = event) do
+    case CLI.stderr_chunk(event) do
+      chunk when is_binary(chunk) ->
+        {stderr, truncated?} =
+          append_stderr_tail(
+            state.stderr,
+            chunk,
+            state.max_stderr_buffer_bytes,
+            state.stderr_truncated?
           )
 
-        {[error_msg], mark_done(state)}
+        %{state | stderr: stderr, stderr_truncated?: truncated?}
+
+      _other ->
+        state
     end
   end
 
-  defp append_stderr(%State{} = state, data) do
-    {stderr, truncated?} =
-      append_stderr_tail(
-        state.stderr,
-        data,
-        state.max_stderr_buffer_bytes,
-        state.stderr_truncated?
-      )
+  defp maybe_attach_stderr(
+         %Types.ErrorResultMessage{kind: :transport_exit} = event,
+         %State{} = state
+       ) do
+    stderr = normalize_stderr(state.stderr)
 
-    %{state | stderr: stderr, stderr_truncated?: truncated?}
+    details =
+      event.details
+      |> normalize_details()
+      |> Map.put("exit_code", event.exit_code)
+      |> put_optional_detail("stderr", if(stderr == "", do: nil, else: stderr))
+      |> Map.put("stderr_truncated?", state.stderr_truncated?)
+
+    %Types.ErrorResultMessage{
+      event
+      | error: if(stderr == "", do: event.error, else: stderr),
+        details: details,
+        stderr: stderr,
+        stderr_truncated?: state.stderr_truncated?
+    }
   end
 
-  defp mark_done(%State{} = state), do: %{state | done?: true}
-  defp mark_result_received(%State{} = state), do: %{state | received_result?: true, done?: true}
+  defp maybe_attach_stderr(%Types.ErrorResultMessage{kind: kind} = event, %State{} = state)
+       when kind in [:parse_error, :stream_start_failed, :stream_timeout, :transport_error] do
+    stderr = normalize_stderr(state.stderr)
 
-  defp cleanup(%State{transport: transport, temp_dir: temp_dir, transport_ref: ref}) do
-    close_transport_with_timeout(transport, @transport_close_grace_ms)
-    flush_transport_messages(ref)
-    cleanup_temp_dir(temp_dir)
-    :ok
+    %Types.ErrorResultMessage{
+      event
+      | stderr: stderr,
+        stderr_truncated?: state.stderr_truncated?
+    }
   end
 
-  defp cleanup(_), do: :ok
-
-  defp close_transport_with_timeout(transport, timeout_ms) when is_pid(transport) do
-    ref = Process.monitor(transport)
-    _ = safe_force_close(transport)
-    await_down_or_shutdown(ref, transport, timeout_ms)
-  end
-
-  defp flush_transport_messages(ref) when is_reference(ref) do
-    receive do
-      {:amp_sdk_transport, ^ref, _event} ->
-        flush_transport_messages(ref)
-    after
-      0 ->
-        :ok
-    end
-  end
-
-  defp await_down_or_shutdown(ref, transport, timeout_ms) do
-    case ProcessSupport.await_down(ref, transport, timeout_ms) do
-      :down ->
-        :ok
-
-      :timeout ->
-        safe_shutdown(transport)
-        await_down_or_kill(ref, transport, 250)
-    end
-  end
-
-  defp await_down_or_kill(ref, transport, timeout_ms) do
-    case ProcessSupport.await_down(ref, transport, timeout_ms) do
-      :down ->
-        :ok
-
-      :timeout ->
-        safe_kill(transport)
-        await_down_or_demonitor(ref, transport, 250)
-    end
-  end
-
-  defp await_down_or_demonitor(ref, transport, timeout_ms) do
-    case ProcessSupport.await_down(ref, transport, timeout_ms) do
-      :down ->
-        :ok
-
-      :timeout ->
-        Process.demonitor(ref, [:flush])
-        :ok
-    end
-  end
-
-  defp safe_close(transport) when is_pid(transport) do
-    Erlexec.close(transport)
-  catch
-    :exit, _ -> :ok
-  end
-
-  defp safe_force_close(transport) when is_pid(transport) do
-    Erlexec.force_close(transport)
-  catch
-    :exit, _ -> {:error, {:transport, :not_connected}}
-  end
-
-  defp safe_shutdown(transport) when is_pid(transport) do
-    Process.exit(transport, :shutdown)
-    :ok
-  catch
-    :exit, _ -> :ok
-  end
-
-  defp safe_kill(transport) when is_pid(transport) do
-    Process.exit(transport, :kill)
-    :ok
-  catch
-    :exit, _ -> :ok
-  end
-
-  defp cleanup_temp_dir(nil), do: :ok
-
-  defp cleanup_temp_dir(dir) do
-    File.rm_rf(dir)
-  rescue
-    _ -> :ok
-  end
-
-  defp resolve_max_stderr_buffer_bytes(%Options{max_stderr_buffer_bytes: max_bytes})
-       when is_integer(max_bytes) and max_bytes > 0,
-       do: max_bytes
-
-  defp resolve_max_stderr_buffer_bytes(_), do: AmpSdk.Defaults.stream_max_stderr_buffer_bytes()
+  defp maybe_attach_stderr(message, _state), do: message
 
   defp append_stderr_tail(_existing, _data, max_size, _already_truncated?)
        when not is_integer(max_size) or max_size <= 0,
@@ -390,23 +262,10 @@ defmodule AmpSdk.Stream do
   end
 
   defp normalize_stderr(stderr) when is_binary(stderr), do: String.trim(stderr)
-  defp normalize_stderr(_), do: ""
-
-  defp decode_exit_code(:normal), do: 0
-  defp decode_exit_code(0), do: 0
-
-  defp decode_exit_code({:exit_status, code}) when is_integer(code),
-    do: normalize_exit_status(code)
-
-  defp decode_exit_code({:status, code}) when is_integer(code), do: normalize_exit_status(code)
-  defp decode_exit_code(code) when is_integer(code), do: normalize_exit_status(code)
-  defp decode_exit_code(_reason), do: nil
-
-  defp normalize_exit_status(code) when code > 255 and rem(code, 256) == 0, do: div(code, 256)
-  defp normalize_exit_status(code), do: code
+  defp normalize_stderr(_stderr), do: ""
 
   defp build_error_result(message, opts) do
-    %AmpSdk.Types.ErrorResultMessage{
+    %Types.ErrorResultMessage{
       error: message,
       is_error: true,
       kind: Keyword.get(opts, :kind),
@@ -417,218 +276,112 @@ defmodule AmpSdk.Stream do
     }
   end
 
-  @spec build_args(Options.t()) :: [String.t()]
-  def build_args(%Options{} = options) do
-    build_args(options, :prompt)
+  defp normalize_details(nil), do: %{}
+  defp normalize_details(details) when is_map(details), do: details
+  defp normalize_details(_details), do: %{}
+
+  defp put_optional_detail(details, _key, nil), do: details
+  defp put_optional_detail(details, key, value), do: Map.put(details, key, value)
+
+  defp mark_done(%State{} = state), do: %{state | done?: true}
+
+  defp cleanup(%State{} = state) do
+    close_session_with_timeout(state.session, state.session_monitor_ref, @session_close_grace_ms)
+    flush_session_messages(state.session_ref, state.session_monitor_ref)
+    cleanup_temp_dir(state.temp_dir)
+    :ok
   end
+
+  defp cleanup(_state), do: :ok
+
+  defp close_session_with_timeout(session, monitor_ref, timeout_ms)
+       when is_pid(session) and is_reference(monitor_ref) do
+    _ = CLI.close(session)
+    await_down_or_shutdown(monitor_ref, session, timeout_ms)
+  end
+
+  defp close_session_with_timeout(_session, _monitor_ref, _timeout_ms), do: :ok
+
+  defp flush_session_messages(ref, monitor_ref)
+       when is_reference(ref) and is_reference(monitor_ref) do
+    receive do
+      {@runtime_event_tag, ^ref, {:event, _event}} ->
+        flush_session_messages(ref, monitor_ref)
+
+      {:DOWN, ^monitor_ref, :process, _pid, _reason} ->
+        flush_session_messages(ref, monitor_ref)
+    after
+      0 ->
+        :ok
+    end
+  end
+
+  defp flush_session_messages(_ref, _monitor_ref), do: :ok
+
+  defp await_down_or_shutdown(ref, session, timeout_ms) do
+    receive do
+      {:DOWN, ^ref, :process, _pid, _reason} ->
+        :ok
+    after
+      timeout_ms ->
+        safe_shutdown(session)
+        await_down_or_kill(ref, session, @session_kill_grace_ms)
+    end
+  end
+
+  defp await_down_or_kill(ref, session, timeout_ms) do
+    receive do
+      {:DOWN, ^ref, :process, _pid, _reason} ->
+        :ok
+    after
+      timeout_ms ->
+        safe_kill(session)
+        await_down_or_demonitor(ref, @session_kill_grace_ms)
+    end
+  end
+
+  defp await_down_or_demonitor(ref, timeout_ms) do
+    receive do
+      {:DOWN, ^ref, :process, _pid, _reason} ->
+        :ok
+    after
+      timeout_ms ->
+        Process.demonitor(ref, [:flush])
+        :ok
+    end
+  end
+
+  defp safe_shutdown(session) when is_pid(session) do
+    Process.exit(session, :shutdown)
+    :ok
+  catch
+    :exit, _reason ->
+      :ok
+  end
+
+  defp safe_kill(session) when is_pid(session) do
+    Process.exit(session, :kill)
+    :ok
+  catch
+    :exit, _reason ->
+      :ok
+  end
+
+  defp cleanup_temp_dir(nil), do: :ok
+  defp cleanup_temp_dir(temp_dir), do: File.rm_rf(temp_dir)
+
+  @spec build_args(Options.t()) :: [String.t()]
+  defdelegate build_args(options), to: CLI
 
   @spec build_args(Options.t(), :prompt | :json_input) :: [String.t()]
-  def build_args(%Options{} = options, input_mode) do
-    []
-    |> add_thread_args(options)
-    |> add_stream_format(options, input_mode)
-    |> add_simple_flags(options)
-    |> add_mcp_config(options)
-    |> add_labels(options)
-    |> add_boolean_flags(options)
-  end
-
-  defp add_thread_args(args, %Options{continue_thread: true}),
-    do: args ++ ["threads", "continue"]
-
-  defp add_thread_args(args, %Options{continue_thread: id}) when is_binary(id),
-    do: args ++ ["threads", "continue", id]
-
-  defp add_thread_args(args, _options), do: args
-
-  defp add_stream_format(args, %Options{thinking: true}, :prompt),
-    do: args ++ ["--execute", "--stream-json-thinking"]
-
-  defp add_stream_format(args, _options, :prompt),
-    do: args ++ ["--execute", "--stream-json"]
-
-  defp add_stream_format(args, _options, :json_input),
-    do: args ++ ["--execute", "--stream-json-input"]
-
-  defp add_simple_flags(args, options) do
-    args
-    |> Util.maybe_append(options.dangerously_allow_all, ["--dangerously-allow-all"])
-    |> Util.maybe_append(options.visibility, ["--visibility", options.visibility])
-    |> Util.maybe_append(options.log_level, ["--log-level", options.log_level])
-    |> Util.maybe_append(options.log_file, ["--log-file", options.log_file])
-    |> Util.maybe_append(options.mode, ["--mode", options.mode])
-  end
-
-  defp add_mcp_config(args, %Options{mcp_config: nil}), do: args
-
-  defp add_mcp_config(args, %Options{mcp_config: config}) when is_binary(config),
-    do: args ++ ["--mcp-config", config]
-
-  defp add_mcp_config(args, %Options{mcp_config: config}),
-    do: args ++ ["--mcp-config", Jason.encode!(config)]
-
-  defp add_labels(args, %Options{labels: nil}), do: args
-
-  defp add_labels(args, %Options{labels: labels}),
-    do: Enum.reduce(labels, args, fn label, acc -> acc ++ ["--label", label] end)
-
-  defp add_boolean_flags(args, options) do
-    args
-    |> Util.maybe_flag(options.no_ide, "--no-ide")
-    |> Util.maybe_flag(options.no_notifications, "--no-notifications")
-    |> Util.maybe_flag(options.no_color, "--no-color")
-    |> Util.maybe_flag(options.no_jetbrains, "--no-jetbrains")
-  end
+  defdelegate build_args(options, input_mode), to: CLI
 
   @doc false
   @spec build_settings_file(Options.t()) ::
           {:ok, String.t() | nil, String.t() | nil} | {:error, Error.t()}
-  def build_settings_file(%Options{permissions: nil, skills: nil}) do
-    {:ok, nil, nil}
-  end
-
-  def build_settings_file(%Options{} = options) do
-    with {:ok, merged} <- read_base_settings(options.settings_file) do
-      merged =
-        if options.permissions do
-          perms = Enum.map(options.permissions, &encode_permission/1)
-          Map.put(merged, "amp.permissions", perms)
-        else
-          merged
-        end
-
-      merged =
-        if options.skills do
-          Map.put(merged, "amp.skills.path", options.skills)
-        else
-          merged
-        end
-
-      write_settings_file(merged)
-    end
-  end
-
-  defp write_settings_file(merged) do
-    case create_temp_dir() do
-      {:ok, temp_dir} ->
-        case persist_settings_file(merged, temp_dir) do
-          {:ok, settings_path} ->
-            {:ok, settings_path, temp_dir}
-
-          {:error, %Error{} = error} ->
-            cleanup_temp_dir(temp_dir)
-            {:error, error}
-        end
-
-      {:error, %Error{} = error} ->
-        {:error, error}
-    end
-  end
-
-  defp persist_settings_file(merged, temp_dir) do
-    settings_path = Path.join(temp_dir, "settings.json")
-
-    with {:ok, encoded} <- encode_settings(merged),
-         :ok <- write_settings(settings_path, encoded) do
-      {:ok, settings_path}
-    end
-  end
-
-  defp encode_settings(merged) do
-    case Jason.encode(merged, pretty: true) do
-      {:ok, encoded} ->
-        {:ok, encoded}
-
-      {:error, reason} ->
-        {:error,
-         Error.new(:invalid_configuration, "Failed to encode temporary settings", cause: reason)}
-    end
-  end
-
-  defp write_settings(settings_path, encoded) do
-    case File.write(settings_path, encoded) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        {:error,
-         Error.new(:invalid_configuration, "Failed to write temporary settings file",
-           cause: reason,
-           context: %{path: settings_path}
-         )}
-    end
-  end
-
-  defp encode_permission(%AmpSdk.Types.Permission{} = p) do
-    p
-    |> Map.from_struct()
-    |> Enum.reject(fn {_k, v} -> is_nil(v) end)
-    |> Map.new()
-  end
-
-  defp encode_permission(other), do: other
-
-  defp create_temp_dir do
-    System.tmp_dir!()
-    |> attempt_create_temp_dir(0)
-  end
-
-  defp attempt_create_temp_dir(_base_dir, attempts) when attempts >= 10 do
-    {:error, Error.new(:invalid_configuration, "Failed to create temporary settings directory")}
-  end
-
-  defp attempt_create_temp_dir(base_dir, attempts) do
-    suffix = Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
-    dir = Path.join(base_dir, "amp-#{suffix}")
-
-    case File.mkdir(dir) do
-      :ok ->
-        {:ok, dir}
-
-      {:error, :eexist} ->
-        attempt_create_temp_dir(base_dir, attempts + 1)
-
-      {:error, reason} ->
-        {:error,
-         Error.new(:invalid_configuration, "Failed to create temporary settings directory",
-           cause: reason,
-           context: %{dir: dir}
-         )}
-    end
-  end
-
-  defp read_base_settings(nil), do: {:ok, %{}}
-
-  defp read_base_settings(path) do
-    case File.read(path) do
-      {:ok, content} ->
-        case Jason.decode(content) do
-          {:ok, data} ->
-            {:ok, data}
-
-          {:error, reason} ->
-            {:error,
-             Error.new(:invalid_configuration, "Invalid JSON in settings file",
-               cause: reason,
-               context: %{path: path}
-             )}
-        end
-
-      {:error, reason} ->
-        {:error,
-         Error.new(:invalid_configuration, "Failed to read settings file",
-           cause: reason,
-           context: %{path: path}
-         )}
-    end
-  end
-
-  defp maybe_add_settings(args, nil), do: args
-  defp maybe_add_settings(args, path), do: args ++ ["--settings-file", path]
+  defdelegate build_settings_file(options), to: CLI
 
   @doc false
   @spec build_env(Options.t()) :: map()
-  def build_env(%Options{env: env, toolbox: toolbox}) do
-    Env.build_cli_env(env || %{}, toolbox: toolbox)
-  end
+  defdelegate build_env(options), to: CLI
 end

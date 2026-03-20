@@ -4,19 +4,19 @@ The Amp SDK uses a streaming architecture to deliver messages in real time as th
 
 ## How It Works
 
-`AmpSdk.execute/2` returns a lazy `Stream` that yields typed message structs. The stream is backed by `Stream.resource/3` — messages are produced as the CLI writes JSON Lines to stdout, and the stream halts automatically when a result message is received.
+`AmpSdk.execute/2` returns a lazy `Stream` that yields typed message structs. The stream is backed by `Stream.resource/3` — messages are produced from the shared core session API and projected back into the public Amp SDK message types, and the stream halts automatically when a final result or error is received.
 
-The stream consumer uses selective receive for transport-tagged messages only. This means unrelated mailbox messages in the caller process are preserved, so `execute/2` can be used safely from OTP processes that also handle other messages.
+The stream consumer uses selective receive for runtime-tagged session messages only. This means unrelated mailbox messages in the caller process are preserved, so `execute/2` can be used safely from OTP processes that also handle other messages.
 
-When a stream finishes (result, timeout, parse error, or transport error), cleanup drains remaining transport-tagged events for that stream reference. This avoids leaving stale `{:amp_sdk_transport, ref, event}` messages in long-lived caller mailboxes.
+When a stream finishes (result, timeout, parse error, or transport error), cleanup drains remaining runtime-tagged events for that session reference. This avoids leaving stale stream events in long-lived caller mailboxes.
 
 `execute/2` accepts either:
 - a string prompt (`--stream-json` / `--stream-json-thinking`)
 - a list of `UserInputMessage` values (`--stream-json-input`)
 
 ```
-Your App  →  AmpSdk.execute/2  →  AmpSdk.Stream  →  Transport.Erlexec  →  amp CLI
-                                     (Stream.resource)   (GenServer)        (subprocess)
+Your App  →  AmpSdk.execute/2  →  AmpSdk.Stream  →  AmpSdk.Runtime.CLI  →  cli_subprocess_core  →  amp CLI
+                                     (Stream.resource)      (session kit)        (shared runtime)      (subprocess)
 ```
 
 ## Message Types
@@ -25,7 +25,7 @@ Messages are yielded in this order during a typical execution:
 
 ### 1. `SystemMessage`
 
-Emitted once at the start of a session.
+Emitted once when the provider session is established.
 
 ```elixir
 %AmpSdk.Types.SystemMessage{

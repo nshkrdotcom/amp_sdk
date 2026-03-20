@@ -6,6 +6,8 @@ defmodule AmpSdk.Command do
 
   @stop_wait_ms 200
   @kill_wait_ms 500
+  @exec_wait_attempts 20
+  @exec_wait_delay_ms 50
 
   @type run_opt ::
           {:timeout, non_neg_integer() | :infinity}
@@ -80,7 +82,8 @@ defmodule AmpSdk.Command do
 
     cmd = Exec.build_command(program, args)
 
-    with {:ok, normalized_stdin} <- normalize_stdin(stdin) do
+    with :ok <- ensure_runtime_started(),
+         {:ok, normalized_stdin} <- normalize_stdin(stdin) do
       run_exec_command(cmd, exec_opts, normalized_stdin, stderr_to_stdout, timeout_deadline)
     end
   rescue
@@ -345,6 +348,39 @@ defmodule AmpSdk.Command do
 
   defp normalize_env(nil), do: %{}
   defp normalize_env(env) when is_map(env) or is_list(env), do: Env.normalize_overrides(env)
+
+  defp ensure_runtime_started do
+    with {:ok, _started_apps} <- Application.ensure_all_started(:amp_sdk),
+         :ok <- wait_for_exec_worker(@exec_wait_attempts) do
+      :ok
+    else
+      {:error, {:already_started, _app}} ->
+        wait_for_exec_worker(@exec_wait_attempts)
+
+      {:error, reason} ->
+        {:error, {:runtime_start_failed, reason}}
+    end
+  end
+
+  defp wait_for_exec_worker(0) do
+    if exec_worker_alive?(), do: :ok, else: {:error, :exec_not_running}
+  end
+
+  defp wait_for_exec_worker(attempts_remaining) when attempts_remaining > 0 do
+    if exec_worker_alive?() do
+      :ok
+    else
+      Process.sleep(@exec_wait_delay_ms)
+      wait_for_exec_worker(attempts_remaining - 1)
+    end
+  end
+
+  defp exec_worker_alive? do
+    case Process.whereis(:exec) do
+      pid when is_pid(pid) -> Process.alive?(pid)
+      _other -> false
+    end
+  end
 
   defp format_reason({:exception, error}), do: Exception.message(error)
   defp format_reason(reason), do: inspect(reason)

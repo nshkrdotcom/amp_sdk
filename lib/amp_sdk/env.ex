@@ -55,7 +55,7 @@ defmodule AmpSdk.Env do
   @spec sdk_version() :: String.t()
   def sdk_version do
     case Application.spec(:amp_sdk, :vsn) do
-      nil -> "unknown"
+      nil -> ""
       vsn when is_list(vsn) -> List.to_string(vsn)
       vsn -> to_string(vsn)
     end

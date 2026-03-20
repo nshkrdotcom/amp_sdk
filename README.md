@@ -131,7 +131,7 @@ alias AmpSdk.Types.{AssistantMessage, ResultMessage, SystemMessage}
 end)
 ```
 
-`AmpSdk.execute/2` returns a lazy `Stream` -- messages arrive as the agent works, and the stream halts automatically when a result or error is received. Transport-tagged mailbox events are drained during cleanup, so finished/timeout streams do not leave residual transport messages in the caller mailbox.
+`AmpSdk.execute/2` returns a lazy `Stream` -- messages arrive as the agent works, and the stream halts automatically when a result or error is received. Under the hood, the public stream surface is projected from a shared core session runtime, while mailbox cleanup still drains runtime-tagged events so finished/timeout streams do not leave residual messages in the caller mailbox.
 
 ### 3. Continue a Thread
 
@@ -492,21 +492,28 @@ Execution failed or hit max turns.
 ┌──────────────────────▼───────────────────────────────┐
 │             AmpSdk.Stream (Stream Engine)            │
 │                                                      │
-│  - Builds CLI args from Options struct               │
-│  - Creates temp settings.json for permissions/skills │
 │  - Wraps execution as Stream.resource/3              │
-│  - Parses JSON lines into typed structs              │
+│  - Starts Amp sessions through the shared core lane  │
+│  - Projects core events into AmpSdk typed messages   │
+│  - Captures stderr tail + cleanup metadata           │
 │  - Halts on ResultMessage / ErrorResultMessage       │
 └──────────────────────┬───────────────────────────────┘
                        │
 ┌──────────────────────▼───────────────────────────────┐
-│     AmpSdk.Transport.Erlexec (GenServer + erlexec)   │
+│            AmpSdk.Runtime.CLI (Session Kit)          │
 │                                                      │
-│  - Spawns `amp --execute --stream-json` subprocess   │
-│  - Manages stdin/stdout/stderr via erlexec           │
-│  - Splits stdout into JSON lines                     │
-│  - Broadcasts lines to subscribers via messages      │
-│  - Handles buffer overflow, process exit, cleanup    │
+│  - Resolves the Amp CLI binary and invocation        │
+│  - Builds Amp-compatible args, env, settings files   │
+│  - Starts shared core provider sessions              │
+│  - Projects provider events back to public structs   │
+└──────────────────────┬───────────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────────┐
+│      cli_subprocess_core (Shared CLI Runtime)        │
+│                                                      │
+│  - Session lifecycle and provider parsing            │
+│  - Shared erlexec transport implementation           │
+│  - Common task supervision and subprocess handling   │
 └──────────────────────┬───────────────────────────────┘
                        │
                ┌───────▼───────┐
@@ -520,9 +527,10 @@ Execution failed or hit max turns.
 | Module | Purpose |
 |---|---|
 | `AmpSdk` | Public API -- `execute/2`, `run/2`, delegation helpers |
-| `AmpSdk.Stream` | Stream engine -- builds args, manages lifecycle, parses output |
+| `AmpSdk.Stream` | Stream engine -- manages lifecycle and projects shared runtime events |
+| `AmpSdk.Runtime.CLI` | Session-oriented runtime kit that preserves Amp CLI invocation semantics |
 | `AmpSdk.Transport` | Behaviour defining the subprocess communication contract |
-| `AmpSdk.Transport.Erlexec` | GenServer implementation using erlexec for process management |
+| `AmpSdk.Transport.Erlexec` | Compatibility wrapper over the shared core erlexec transport |
 | `AmpSdk.CLI` | CLI binary discovery across multiple install methods |
 | `AmpSdk.Threads` | Thread lifecycle management wrappers over CLI commands |
 | `AmpSdk.Types` | All structs: messages, content blocks, options, permissions, MCP config |
