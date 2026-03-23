@@ -1,5 +1,5 @@
 defmodule AmpSdk.Transport do
-  @moduledoc "Behaviour for the thin public Amp transport compatibility facade."
+  @moduledoc "Behaviour for the public Amp raw transport surface."
 
   alias AmpSdk.Error
 

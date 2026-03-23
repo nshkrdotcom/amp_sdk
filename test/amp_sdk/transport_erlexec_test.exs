@@ -74,7 +74,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
     assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
   end
 
-  test "captures stderr and emits it on exit" do
+  test "captures fast-exit stderr for subscribers that attach after start" do
     {:ok, transport} =
       Erlexec.start(
         command: sh_path(),

@@ -31,9 +31,9 @@ Use tuple returns where possible and pattern-match on `%AmpSdk.Error{}` in appli
 
 ## Low-Level Transport Errors
 
-At the low-level transport boundary (`AmpSdk.Transport.Erlexec`), the thin
-public compatibility facade over the shared core transport returns tagged
-tuples:
+At the low-level transport boundary (`AmpSdk.Transport.Erlexec`), the
+Amp-named public transport surface over the shared core transport returns
+tagged tuples:
 
 ```elixir
 {:error, {:transport, reason}}

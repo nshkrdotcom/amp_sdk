@@ -1,10 +1,10 @@
 defmodule AmpSdk.Transport.Erlexec do
   @moduledoc """
-  Thin compatibility facade over `CliSubprocessCore.Transport`.
+  Amp raw transport entrypoint backed by `CliSubprocessCore.Transport`.
 
-  This module remains only to preserve Amp's public transport module path and
-  public event/error shapes. Subprocess lifecycle, shutdown, task supervision,
-  and raw transport behavior are owned by the shared core.
+  This module preserves Amp's public transport module path and event/error
+  shapes while the shared core owns subprocess lifecycle, shutdown, task
+  supervision, and raw transport behavior.
   """
 
   import Kernel, except: [send: 2]
@@ -12,127 +12,12 @@ defmodule AmpSdk.Transport.Erlexec do
   alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
   alias CliSubprocessCore.Transport, as: CoreTransport
   alias CliSubprocessCore.Transport.Error, as: CoreTransportError
-  alias CliSubprocessCore.Transport.Options, as: CoreOptions
+  alias CliSubprocessCore.Transport.TaggedRelay
 
   @behaviour AmpSdk.Transport
 
   @core_event_tag :amp_sdk_core_transport
-  defmodule SubscriberProxy do
-    @moduledoc false
-
-    alias AmpSdk.Transport.Erlexec
-    alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
-    alias CliSubprocessCore.Transport.Error, as: CoreTransportError
-
-    @core_event_tag :amp_sdk_core_transport
-    @public_event_tag :amp_sdk_transport
-
-    def start(target_pid, target_tag, max_stderr_buffer_size)
-        when is_pid(target_pid) and is_reference(target_tag) do
-      core_ref = make_ref()
-
-      pid =
-        spawn(fn ->
-          target_monitor_ref = Process.monitor(target_pid)
-
-          loop(%{
-            target_pid: target_pid,
-            target_tag: target_tag,
-            target_monitor_ref: target_monitor_ref,
-            transport_monitor_ref: nil,
-            core_ref: core_ref,
-            stderr: "",
-            max_stderr_buffer_size: max_stderr_buffer_size
-          })
-        end)
-
-      {:ok, pid, core_ref}
-    end
-
-    def attach_transport(proxy, transport) when is_pid(proxy) and is_pid(transport) do
-      Kernel.send(proxy, {:attach_transport, transport})
-      :ok
-    end
-
-    def stop(proxy) when is_pid(proxy) do
-      Process.exit(proxy, :normal)
-      :ok
-    end
-
-    defp loop(state) do
-      receive do
-        {:attach_transport, transport} when is_pid(transport) ->
-          transport_monitor_ref = Process.monitor(transport)
-          loop(%{state | transport_monitor_ref: transport_monitor_ref})
-
-        {@core_event_tag, ref, {:message, line}}
-        when ref == state.core_ref and is_binary(line) ->
-          forward_event(state, {:message, line})
-          loop(state)
-
-        {@core_event_tag, ref, {:error, %CoreTransportError{} = error}}
-        when ref == state.core_ref ->
-          forward_event(state, {:error, Erlexec.legacy_transport_reason(error)})
-          loop(state)
-
-        {@core_event_tag, ref, {:stderr, data}}
-        when ref == state.core_ref and is_binary(data) ->
-          loop(%{
-            state
-            | stderr: append_stderr_tail(state.stderr, data, state.max_stderr_buffer_size)
-          })
-
-        {@core_event_tag, ref, {:exit, %CoreProcessExit{} = exit}} when ref == state.core_ref ->
-          maybe_forward_stderr(state)
-          forward_event(state, {:exit, exit.reason})
-          cleanup_monitors(state)
-          :ok
-
-        {:DOWN, monitor_ref, :process, _pid, _reason}
-        when monitor_ref == state.target_monitor_ref ->
-          cleanup_monitors(state)
-          :ok
-
-        {:DOWN, monitor_ref, :process, _pid, _reason}
-        when monitor_ref == state.transport_monitor_ref ->
-          cleanup_monitors(state)
-          :ok
-
-        _other ->
-          loop(state)
-      end
-    end
-
-    defp maybe_forward_stderr(%{stderr: ""}), do: :ok
-
-    defp maybe_forward_stderr(%{stderr: stderr} = state) do
-      forward_event(state, {:stderr, stderr})
-    end
-
-    defp forward_event(%{target_pid: pid, target_tag: tag}, event) do
-      Kernel.send(pid, {@public_event_tag, tag, event})
-    end
-
-    defp append_stderr_tail(_existing, _data, max_size)
-         when not is_integer(max_size) or max_size <= 0,
-         do: ""
-
-    defp append_stderr_tail(existing, data, max_size) do
-      combined = existing <> data
-      combined_size = byte_size(combined)
-
-      if combined_size <= max_size do
-        combined
-      else
-        :binary.part(combined, combined_size - max_size, max_size)
-      end
-    end
-
-    defp cleanup_monitors(%{target_monitor_ref: target_ref, transport_monitor_ref: transport_ref}) do
-      Process.demonitor(target_ref, [:flush])
-      if is_reference(transport_ref), do: Process.demonitor(transport_ref, [:flush])
-    end
-  end
+  @public_event_tag :amp_sdk_transport
 
   @impl AmpSdk.Transport
   def start(opts) when is_list(opts) do
@@ -153,17 +38,19 @@ defmodule AmpSdk.Transport.Erlexec do
   @impl AmpSdk.Transport
   def subscribe(transport, pid, tag)
       when is_pid(transport) and is_pid(pid) and is_reference(tag) do
-    max_stderr_buffer_size = transport_max_stderr_buffer_size(transport)
-    {:ok, proxy, core_ref} = SubscriberProxy.start(pid, tag, max_stderr_buffer_size)
+    with {:ok, relay, core_ref} <- start_tagged_relay(pid, tag) do
+      case CoreTransport.subscribe(transport, relay, core_ref) |> legacy_reply() do
+        :ok ->
+          TaggedRelay.attach_transport(relay, transport)
+          :ok
 
-    case CoreTransport.subscribe(transport, proxy, core_ref) |> legacy_reply() do
-      :ok ->
-        SubscriberProxy.attach_transport(proxy, transport)
-        :ok
-
-      {:error, _reason} = error ->
-        _ = SubscriberProxy.stop(proxy)
-        error
+        {:error, _reason} = error ->
+          _ = TaggedRelay.stop(relay)
+          error
+      end
+    else
+      {:error, reason} ->
+        {:error, {:transport, reason}}
     end
   end
 
@@ -204,17 +91,16 @@ defmodule AmpSdk.Transport.Erlexec do
     {subscriber, opts} = Keyword.pop(opts, :subscriber)
     normalized_opts = normalize_start_opts(opts)
 
-    with {:ok, subscriber_proxy, core_subscriber} <-
-           build_bootstrap_subscriber(subscriber, normalized_opts) do
+    with {:ok, subscriber_relay, core_subscriber} <- build_bootstrap_subscriber(subscriber) do
       case maybe_add_subscriber(normalized_opts, core_subscriber)
            |> start_fun.()
            |> legacy_reply() do
         {:ok, transport} ->
-          maybe_attach_bootstrap_proxy(subscriber_proxy, transport)
+          maybe_attach_bootstrap_relay(subscriber_relay, transport)
           {:ok, transport}
 
         {:error, _reason} = error ->
-          maybe_stop_bootstrap_proxy(subscriber_proxy)
+          maybe_stop_bootstrap_relay(subscriber_relay)
           error
       end
     else
@@ -239,41 +125,59 @@ defmodule AmpSdk.Transport.Erlexec do
     end
   end
 
-  defp build_bootstrap_subscriber(nil, _opts), do: {:ok, nil, nil}
+  defp build_bootstrap_subscriber(nil), do: {:ok, nil, nil}
 
-  defp build_bootstrap_subscriber({pid, tag}, opts)
-       when is_pid(pid) and is_reference(tag) do
-    max_size =
-      Keyword.get(opts, :max_stderr_buffer_size, CoreOptions.default_max_stderr_buffer_size())
-
-    {:ok, proxy, core_ref} = SubscriberProxy.start(pid, tag, max_size)
-    {:ok, proxy, {proxy, core_ref}}
+  defp build_bootstrap_subscriber({pid, tag}) when is_pid(pid) and is_reference(tag) do
+    with {:ok, relay, core_ref} <- start_tagged_relay(pid, tag) do
+      {:ok, relay, {relay, core_ref}}
+    end
   end
 
-  defp build_bootstrap_subscriber(subscriber, _opts),
+  defp build_bootstrap_subscriber(subscriber),
     do: {:error, {:invalid_subscriber, subscriber}}
 
   defp maybe_add_subscriber(opts, nil), do: opts
   defp maybe_add_subscriber(opts, subscriber), do: Keyword.put(opts, :subscriber, subscriber)
 
-  defp maybe_attach_bootstrap_proxy(nil, _transport), do: :ok
+  defp maybe_attach_bootstrap_relay(nil, _transport), do: :ok
 
-  defp maybe_attach_bootstrap_proxy(proxy, transport) when is_pid(proxy) and is_pid(transport) do
-    SubscriberProxy.attach_transport(proxy, transport)
+  defp maybe_attach_bootstrap_relay(relay, transport) when is_pid(relay) and is_pid(transport) do
+    TaggedRelay.attach_transport(relay, transport)
   end
 
-  defp maybe_stop_bootstrap_proxy(nil), do: :ok
-  defp maybe_stop_bootstrap_proxy(proxy) when is_pid(proxy), do: SubscriberProxy.stop(proxy)
+  defp maybe_stop_bootstrap_relay(nil), do: :ok
+  defp maybe_stop_bootstrap_relay(relay) when is_pid(relay), do: TaggedRelay.stop(relay)
 
-  defp transport_max_stderr_buffer_size(transport) when is_pid(transport) do
-    case :sys.get_state(transport) do
-      %{max_stderr_buffer_size: max_size} when is_integer(max_size) -> max_size
-      _other -> CoreOptions.default_max_stderr_buffer_size()
+  defp start_tagged_relay(pid, tag) when is_pid(pid) and is_reference(tag) do
+    core_ref = make_ref()
+
+    case TaggedRelay.start(pid, tag,
+           core_event_tag: @core_event_tag,
+           core_ref: core_ref,
+           public_event_tag: @public_event_tag,
+           event_mapper: &map_core_event/1
+         ) do
+      {:ok, relay} -> {:ok, relay, core_ref}
+      {:error, reason} -> {:error, reason}
     end
-  catch
-    :exit, _reason ->
-      CoreOptions.default_max_stderr_buffer_size()
   end
+
+  defp map_core_event({:message, line}) when is_binary(line), do: [{:message, line}]
+
+  defp map_core_event({:error, %CoreTransportError{} = error}) do
+    [{:error, legacy_transport_reason(error)}]
+  end
+
+  defp map_core_event({:stderr, _chunk}), do: []
+
+  defp map_core_event({:exit, %CoreProcessExit{} = exit}) do
+    maybe_emit_stderr(exit.stderr) ++ [{:exit, exit.reason}]
+  end
+
+  defp map_core_event(_event), do: []
+
+  defp maybe_emit_stderr(stderr) when is_binary(stderr) and stderr != "", do: [{:stderr, stderr}]
+  defp maybe_emit_stderr(_stderr), do: []
 
   defp legacy_reply(:ok), do: :ok
 
