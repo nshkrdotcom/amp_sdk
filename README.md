@@ -537,12 +537,12 @@ Execution failed or hit max turns.
 |---|---|
 | `AmpSdk` | Public API -- `execute/2`, `run/2`, delegation helpers |
 | `AmpSdk.Stream` | Stream engine -- manages lifecycle and projects shared runtime events |
-| `AmpSdk.Command` | Thin Amp-specific wrapper over `CliSubprocessCore.Command.run/2` |
+| `AmpSdk.Command` | Amp-specific command adapter over `CliSubprocessCore.Command.run/2` |
 | `AmpSdk.Runtime.CLI` | Session-oriented runtime kit that preserves Amp CLI invocation semantics |
 | `AmpSdk.Transport` | Behaviour defining the subprocess communication contract |
 | `AmpSdk.Transport.Erlexec` | Amp raw transport entrypoint that preserves Amp public transport event/error shapes on top of the core-owned transport |
 | `AmpSdk.CLI` | CLI binary discovery across multiple install methods |
-| `AmpSdk.Threads` | Thread lifecycle management wrappers over CLI commands |
+| `AmpSdk.Threads` | Thread lifecycle management helpers over CLI commands |
 | `AmpSdk.Types` | All structs: messages, content blocks, options, permissions, MCP config |
 | `AmpSdk.Types.ThreadSummary` | Typed thread list entries from `threads_list/1` |
 | `AmpSdk.Types.PermissionRule` | Typed permission list entries from `permissions_list/1` |
@@ -551,7 +551,7 @@ Execution failed or hit max turns.
 
 ### Ownership Boundary
 
-Phase 2A finished the Amp ownership cut:
+The final Phase 3 boundary for Amp is:
 
 - `AmpSdk.Stream`, `AmpSdk.Runtime.CLI`, and `AmpSdk.Command` now sit above the
   shared `cli_subprocess_core` session and command lanes
@@ -562,9 +562,9 @@ Phase 2A finished the Amp ownership cut:
 
 Repo-local ownership is limited to CLI discovery, Amp-specific option and
 environment shaping, typed message/result projection, and the public
-thread/permission/MCP management wrappers.
+thread/permission/MCP management helpers.
 
-Phase 2B keeps Amp on the simple packaging path:
+The release and composition model is:
 
 - the common Amp profile stays built into `cli_subprocess_core`
 - `amp_sdk` remains the provider-specific runtime-kit package above that shared
