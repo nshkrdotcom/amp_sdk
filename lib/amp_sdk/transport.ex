@@ -1,5 +1,5 @@
 defmodule AmpSdk.Transport do
-  @moduledoc "Behaviour for CLI transport implementations."
+  @moduledoc "Behaviour for the thin public Amp transport compatibility facade."
 
   alias AmpSdk.Error
 

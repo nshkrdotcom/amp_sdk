@@ -28,7 +28,7 @@ defmodule AmpSdk.MixProject do
   def application do
     [
       mod: {AmpSdk.Application, []},
-      extra_applications: [:logger, :erlexec]
+      extra_applications: [:logger]
     ]
   end
 
@@ -38,7 +38,6 @@ defmodule AmpSdk.MixProject do
   defp deps do
     [
       {:cli_subprocess_core, path: "../cli_subprocess_core"},
-      {:erlexec, "~> 2.0"},
       {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},

@@ -1,9 +1,7 @@
 defmodule AmpSdk.Transport.ErlexecTest do
   use ExUnit.Case, async: false
 
-  alias AmpSdk.TestSupport
   alias AmpSdk.Transport.Erlexec
-  alias CliSubprocessCore.LineFraming
 
   defp sh_path do
     System.find_executable("sh") || "sh"
@@ -24,6 +22,24 @@ defmodule AmpSdk.Transport.ErlexecTest do
     assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
   end
 
+  test "start/1 preserves Amp bootstrap subscriber tagging" do
+    ref = make_ref()
+
+    {:ok, transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "printf 'boot\\n'"],
+        subscriber: {self(), ref}
+      )
+
+    try do
+      assert_receive {:amp_sdk_transport, ^ref, {:message, "boot"}}, 1_000
+      assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
+    after
+      Erlexec.close(transport)
+    end
+  end
+
   test "start/1 wraps init failures as tagged transport errors" do
     assert {:error, {:transport, _reason}} =
              Erlexec.start(command: "sh", args: ["-c", "echo ok"], subscriber: :bad)
@@ -40,21 +56,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
     end
   end
 
-  test "flushes partial line on process exit" do
-    {:ok, transport} =
-      Erlexec.start(
-        command: sh_path(),
-        args: ["-c", "printf 'partial-line'"]
-      )
-
-    ref = make_ref()
-    :ok = Erlexec.subscribe(transport, self(), ref)
-
-    assert_receive {:amp_sdk_transport, ^ref, {:message, "partial-line"}}, 1_000
-    assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
-  end
-
-  test "emits buffer overflow and resumes at next complete line" do
+  test "preserves Amp's public buffer overflow error shape" do
     long_line = String.duplicate("a", 64)
 
     {:ok, transport} =
@@ -103,57 +105,6 @@ defmodule AmpSdk.Transport.ErlexecTest do
     assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
   end
 
-  test "uses shared task supervisor without per-transport fallback supervisor allocation" do
-    {:ok, transport} =
-      Erlexec.start(
-        command: sh_path(),
-        args: ["-c", "cat"]
-      )
-
-    try do
-      state = :sys.get_state(transport)
-
-      assert state.task_supervisor == AmpSdk.TaskSupervisor
-      assert Map.get(state, :io_supervisor) in [nil, AmpSdk.TaskSupervisor]
-    after
-      Erlexec.close(transport)
-    end
-  end
-
-  test "safe_call uses the shared task supervisor for blocked client calls" do
-    {:ok, transport} =
-      Erlexec.start(
-        command: sh_path(),
-        args: ["-c", "cat"]
-      )
-
-    try do
-      baseline_active = DynamicSupervisor.count_children(AmpSdk.TaskSupervisor).active
-      :ok = :sys.suspend(transport)
-      parent = self()
-
-      caller =
-        spawn(fn ->
-          send(parent, {:status_result, Erlexec.status(transport)})
-        end)
-
-      assert TestSupport.wait_until(
-               fn ->
-                 DynamicSupervisor.count_children(AmpSdk.TaskSupervisor).active > baseline_active
-               end,
-               500
-             ) == :ok
-
-      :ok = :sys.resume(transport)
-      assert_receive {:status_result, :connected}, 1_000
-      refute Process.alive?(caller)
-    after
-      if Process.alive?(transport) do
-        _ = Erlexec.force_close(transport)
-      end
-    end
-  end
-
   test "supports end_input/1 for EOF driven commands" do
     cat = System.find_executable("cat") || "cat"
 
@@ -166,32 +117,6 @@ defmodule AmpSdk.Transport.ErlexecTest do
 
     assert_receive {:amp_sdk_transport, ^ref, {:message, "echo me"}}, 1_000
     assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
-  end
-
-  test "stops transport when last subscriber goes down" do
-    {:ok, transport} =
-      Erlexec.start(
-        command: sh_path(),
-        args: ["-c", "cat"]
-      )
-
-    monitor_ref = Process.monitor(transport)
-
-    subscriber =
-      spawn(fn ->
-        :ok = Erlexec.subscribe(transport, self(), make_ref())
-
-        receive do
-        after
-          50 ->
-            :ok
-        end
-      end)
-
-    Process.monitor(subscriber)
-
-    assert_receive {:DOWN, _sub_ref, :process, ^subscriber, _}, 1_000
-    assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _}, 1_500
   end
 
   test "returns typed not_connected errors when called after transport exits" do
@@ -212,114 +137,6 @@ defmodule AmpSdk.Transport.ErlexecTest do
 
     assert :disconnected = Erlexec.status(transport)
     assert "" = Erlexec.stderr(transport)
-  end
-
-  test "force_close/1 returns timeout error without killing an unresponsive transport" do
-    {:ok, transport} =
-      Erlexec.start(
-        command: sh_path(),
-        args: ["-c", "cat"]
-      )
-
-    monitor_ref = Process.monitor(transport)
-
-    try do
-      :ok = :sys.suspend(transport)
-
-      assert {:error, {:transport, :timeout}} = Erlexec.force_close(transport)
-      assert Process.alive?(transport)
-      refute_received {:DOWN, ^monitor_ref, :process, ^transport, _reason}
-
-      :ok = :sys.resume(transport)
-      assert :ok = Erlexec.force_close(transport)
-      assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 1_500
-    after
-      if Process.alive?(transport) do
-        _ = Process.exit(transport, :kill)
-        assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 1_500
-      end
-    end
-  end
-
-  test "headless transports auto-stop after idle timeout when no subscriber is attached" do
-    {:ok, transport} =
-      Erlexec.start(
-        command: sh_path(),
-        args: ["-c", "cat"],
-        headless_timeout_ms: 50
-      )
-
-    monitor_ref = Process.monitor(transport)
-    assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 1_000
-  end
-
-  test "finalize exit draining remains responsive for status calls with large pending queues" do
-    {:ok, transport} =
-      Erlexec.start(
-        command: sh_path(),
-        args: ["-c", "cat"]
-      )
-
-    monitor_ref = Process.monitor(transport)
-
-    try do
-      state = :sys.get_state(transport)
-      {pid, os_pid} = state.subprocess
-
-      pending_lines =
-        Enum.reduce(1..200_000, :queue.new(), fn _idx, queue ->
-          :queue.in("line", queue)
-        end)
-
-      :sys.replace_state(transport, fn current ->
-        %{
-          current
-          | pending_lines: pending_lines,
-            stdout_framer: %LineFraming{},
-            drain_scheduled?: false
-        }
-      end)
-
-      send(transport, {:finalize_exit, os_pid, pid, :normal})
-
-      assert :connected = GenServer.call(transport, :status, 20)
-      assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 5_000
-    after
-      if Process.alive?(transport) do
-        _ = Erlexec.force_close(transport)
-        assert_receive {:DOWN, ^monitor_ref, :process, ^transport, _reason}, 1_500
-      end
-    end
-  end
-
-  test "handles UTF-8 codepoint split across stdout chunks" do
-    {:ok, transport} =
-      Erlexec.start(
-        command: sh_path(),
-        args: ["-c", "sleep 5"]
-      )
-
-    ref = make_ref()
-    :ok = Erlexec.subscribe(transport, self(), ref)
-
-    try do
-      state = :sys.get_state(transport)
-      {_exec_pid, os_pid} = state.subprocess
-
-      line = "hello " <> <<226, 128, 148>> <> " world\n"
-      {idx, _len} = :binary.match(line, <<226, 128, 148>>)
-      chunk1 = :binary.part(line, 0, idx + 1)
-      chunk2 = :binary.part(line, idx + 1, byte_size(line) - idx - 1)
-
-      send(transport, {:stdout, os_pid, chunk1})
-      send(transport, {:stdout, os_pid, chunk2})
-
-      assert_receive {:amp_sdk_transport, ^ref,
-                      {:message, "hello " <> <<226, 128, 148>> <> " world"}},
-                     2_000
-    after
-      _ = Erlexec.force_close(transport)
-    end
   end
 
   test "supports interrupt/1 for in-flight subprocesses" do

@@ -669,7 +669,7 @@ defmodule AmpSdk.Runtime.CLI do
   defp truthy?(value) when value in [true, "true", 1, "1", "yes", "on"], do: true
   defp truthy?(_value), do: false
 
-  defp valid_session_id?(value), do: is_binary(value) and value not in ["", "nil"]
+  defp valid_session_id?(value), do: value not in ["", "nil"]
 
   defp existing_error_kind(code) do
     String.to_existing_atom(code)

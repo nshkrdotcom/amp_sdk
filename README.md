@@ -509,9 +509,18 @@ Execution failed or hit max turns.
 └──────────────────────┬───────────────────────────────┘
                        │
 ┌──────────────────────▼───────────────────────────────┐
+│              AmpSdk.Command (One-Shot API)          │
+│                                                      │
+│  - Resolves Amp CLI command specs                    │
+│  - Preserves Amp-specific public result/error shape  │
+│  - Delegates non-PTY execution to the shared core    │
+└──────────────────────┬───────────────────────────────┘
+                       │
+┌──────────────────────▼───────────────────────────────┐
 │      cli_subprocess_core (Shared CLI Runtime)        │
 │                                                      │
 │  - Session lifecycle and provider parsing            │
+│  - Shared non-PTY command execution                  │
 │  - Shared erlexec transport implementation           │
 │  - Common task supervision and subprocess handling   │
 └──────────────────────┬───────────────────────────────┘
@@ -528,9 +537,10 @@ Execution failed or hit max turns.
 |---|---|
 | `AmpSdk` | Public API -- `execute/2`, `run/2`, delegation helpers |
 | `AmpSdk.Stream` | Stream engine -- manages lifecycle and projects shared runtime events |
+| `AmpSdk.Command` | Thin Amp-specific wrapper over `CliSubprocessCore.Command.run/2` |
 | `AmpSdk.Runtime.CLI` | Session-oriented runtime kit that preserves Amp CLI invocation semantics |
 | `AmpSdk.Transport` | Behaviour defining the subprocess communication contract |
-| `AmpSdk.Transport.Erlexec` | Compatibility wrapper over the shared core erlexec transport |
+| `AmpSdk.Transport.Erlexec` | Thin compatibility facade that only preserves Amp public transport event/error shapes |
 | `AmpSdk.CLI` | CLI binary discovery across multiple install methods |
 | `AmpSdk.Threads` | Thread lifecycle management wrappers over CLI commands |
 | `AmpSdk.Types` | All structs: messages, content blocks, options, permissions, MCP config |
@@ -574,7 +584,11 @@ Streaming failures are surfaced inline as `ErrorResultMessage` structs:
 end)
 ```
 
-Low-level transport APIs (`AmpSdk.Transport.Erlexec`) return tagged tuples like `{:error, {:transport, reason}}`; use `AmpSdk.Transport.error_to_error/2` (or `AmpSdk.Error.normalize/2`) when you want the unified envelope there as well.
+Low-level transport APIs (`AmpSdk.Transport.Erlexec`) remain as a thin
+compatibility facade over the shared core transport and return tagged tuples
+like `{:error, {:transport, reason}}`; use `AmpSdk.Transport.error_to_error/2`
+(or `AmpSdk.Error.normalize/2`) when you want the unified envelope there as
+well.
 
 ---
 

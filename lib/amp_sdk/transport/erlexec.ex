@@ -1,26 +1,27 @@
 defmodule AmpSdk.Transport.Erlexec do
   @moduledoc """
-  Thin compatibility wrapper around `CliSubprocessCore.Transport.Erlexec`.
+  Thin compatibility facade over `CliSubprocessCore.Transport`.
+
+  This module remains only to preserve Amp's public transport module path and
+  public event/error shapes. Subprocess lifecycle, shutdown, task supervision,
+  and raw transport behavior are owned by the shared core.
   """
 
   import Kernel, except: [send: 2]
 
   alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
-  alias CliSubprocessCore.Transport.Erlexec, as: CoreErlexec
+  alias CliSubprocessCore.Transport, as: CoreTransport
   alias CliSubprocessCore.Transport.Error, as: CoreTransportError
   alias CliSubprocessCore.Transport.Options, as: CoreOptions
 
   @behaviour AmpSdk.Transport
 
   @core_event_tag :amp_sdk_core_transport
-  @default_call_timeout AmpSdk.Defaults.transport_call_timeout_ms()
-  @default_force_close_timeout AmpSdk.Defaults.transport_force_close_timeout_ms()
   defmodule SubscriberProxy do
     @moduledoc false
 
     alias AmpSdk.Transport.Erlexec
     alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
-    alias CliSubprocessCore.Transport.Erlexec, as: CoreErlexec
     alias CliSubprocessCore.Transport.Error, as: CoreTransportError
 
     @core_event_tag :amp_sdk_core_transport
@@ -38,7 +39,6 @@ defmodule AmpSdk.Transport.Erlexec do
             target_pid: target_pid,
             target_tag: target_tag,
             target_monitor_ref: target_monitor_ref,
-            transport: nil,
             transport_monitor_ref: nil,
             core_ref: core_ref,
             stderr: "",
@@ -63,7 +63,7 @@ defmodule AmpSdk.Transport.Erlexec do
       receive do
         {:attach_transport, transport} when is_pid(transport) ->
           transport_monitor_ref = Process.monitor(transport)
-          loop(%{state | transport: transport, transport_monitor_ref: transport_monitor_ref})
+          loop(%{state | transport_monitor_ref: transport_monitor_ref})
 
         {@core_event_tag, ref, {:message, line}}
         when ref == state.core_ref and is_binary(line) ->
@@ -90,7 +90,6 @@ defmodule AmpSdk.Transport.Erlexec do
 
         {:DOWN, monitor_ref, :process, _pid, _reason}
         when monitor_ref == state.target_monitor_ref ->
-          maybe_detach_transport(state)
           cleanup_monitors(state)
           :ok
 
@@ -102,27 +101,6 @@ defmodule AmpSdk.Transport.Erlexec do
         _other ->
           loop(state)
       end
-    end
-
-    defp maybe_detach_transport(%{transport: transport} = state) when is_pid(transport) do
-      _ = CoreErlexec.unsubscribe(transport, self())
-
-      if transport_subscriber_count(transport) == 0 do
-        _ = CoreErlexec.close(transport)
-      end
-
-      state
-    end
-
-    defp maybe_detach_transport(state), do: state
-
-    defp transport_subscriber_count(transport) when is_pid(transport) do
-      case :sys.get_state(transport) do
-        %{subscribers: subscribers} when is_map(subscribers) -> map_size(subscribers)
-        _other -> 0
-      end
-    catch
-      :exit, _reason -> 0
     end
 
     defp maybe_forward_stderr(%{stderr: ""}), do: :ok
@@ -151,27 +129,25 @@ defmodule AmpSdk.Transport.Erlexec do
     end
 
     defp cleanup_monitors(%{target_monitor_ref: target_ref, transport_monitor_ref: transport_ref}) do
-      if is_reference(target_ref), do: Process.demonitor(target_ref, [:flush])
+      Process.demonitor(target_ref, [:flush])
       if is_reference(transport_ref), do: Process.demonitor(transport_ref, [:flush])
     end
   end
 
   @impl AmpSdk.Transport
   def start(opts) when is_list(opts) do
-    start_transport(:start, opts)
+    start_transport(&CoreTransport.start/1, opts)
   end
 
   @impl AmpSdk.Transport
   def start_link(opts) when is_list(opts) do
-    start_transport(:start_link, opts)
+    start_transport(&CoreTransport.start_link/1, opts)
   end
 
   @impl AmpSdk.Transport
   def send(transport, message) when is_pid(transport) do
-    case safe_call(transport, {:send, message}) do
-      {:ok, result} -> legacy_reply(result)
-      {:error, reason} -> transport_error(reason)
-    end
+    CoreTransport.send(transport, message)
+    |> legacy_reply()
   end
 
   @impl AmpSdk.Transport
@@ -180,106 +156,105 @@ defmodule AmpSdk.Transport.Erlexec do
     max_stderr_buffer_size = transport_max_stderr_buffer_size(transport)
     {:ok, proxy, core_ref} = SubscriberProxy.start(pid, tag, max_stderr_buffer_size)
 
-    case subscribe_proxy(transport, proxy, core_ref) do
+    case CoreTransport.subscribe(transport, proxy, core_ref) |> legacy_reply() do
       :ok ->
         SubscriberProxy.attach_transport(proxy, transport)
         :ok
 
-      {:error, reason} ->
-        transport_error(reason)
+      {:error, _reason} = error ->
+        _ = SubscriberProxy.stop(proxy)
+        error
     end
   end
 
   @impl AmpSdk.Transport
-  def close(transport) when is_pid(transport), do: CoreErlexec.close(transport)
+  def close(transport) when is_pid(transport), do: CoreTransport.close(transport)
 
   @impl AmpSdk.Transport
   def force_close(transport) when is_pid(transport) do
-    case safe_call(transport, :force_close, @default_force_close_timeout) do
-      {:ok, :ok} -> :ok
-      {:error, :not_connected} -> :ok
-      {:error, reason} -> transport_error(reason)
+    case CoreTransport.force_close(transport) |> legacy_reply() do
+      :ok -> :ok
+      {:error, {:transport, :not_connected}} -> :ok
+      {:error, _reason} = error -> error
     end
   end
 
   @impl AmpSdk.Transport
   def interrupt(transport) when is_pid(transport) do
-    case safe_call(transport, :interrupt) do
-      {:ok, :ok} -> :ok
-      {:error, :not_connected} -> :ok
-      {:error, reason} -> transport_error(reason)
+    case CoreTransport.interrupt(transport) |> legacy_reply() do
+      :ok -> :ok
+      {:error, {:transport, :not_connected}} -> :ok
+      {:error, _reason} = error -> error
     end
   end
 
   @impl AmpSdk.Transport
-  def status(transport) when is_pid(transport) do
-    case safe_call(transport, :status) do
-      {:ok, status} when status in [:connected, :disconnected, :error] -> status
-      {:ok, _other} -> :error
-      {:error, _reason} -> :disconnected
-    end
-  end
+  def status(transport) when is_pid(transport), do: CoreTransport.status(transport)
 
   @impl AmpSdk.Transport
   def end_input(transport) when is_pid(transport) do
-    case safe_call(transport, :end_input) do
-      {:ok, result} -> legacy_reply(result)
-      {:error, reason} -> transport_error(reason)
-    end
+    CoreTransport.end_input(transport)
+    |> legacy_reply()
   end
 
   @spec stderr(pid()) :: String.t()
-  def stderr(transport) when is_pid(transport) do
-    case safe_call(transport, :stderr) do
-      {:ok, value} when is_binary(value) -> value
-      _other -> ""
-    end
-  end
+  def stderr(transport) when is_pid(transport), do: CoreTransport.stderr(transport)
 
-  defp start_transport(mode, opts) when mode in [:start, :start_link] do
+  defp start_transport(start_fun, opts) when is_function(start_fun, 1) and is_list(opts) do
     {subscriber, opts} = Keyword.pop(opts, :subscriber)
+    normalized_opts = normalize_start_opts(opts)
 
-    with {:ok, normalized_opts} <- normalize_start_opts(opts),
-         {:ok, subscriber_proxy, core_subscriber} <-
+    with {:ok, subscriber_proxy, core_subscriber} <-
            build_bootstrap_subscriber(subscriber, normalized_opts) do
-      case start_core_transport(mode, normalized_opts, core_subscriber) do
+      case maybe_add_subscriber(normalized_opts, core_subscriber)
+           |> start_fun.()
+           |> legacy_reply() do
         {:ok, transport} ->
           maybe_attach_bootstrap_proxy(subscriber_proxy, transport)
           {:ok, transport}
 
-        {:error, reason} ->
+        {:error, _reason} = error ->
           maybe_stop_bootstrap_proxy(subscriber_proxy)
-          transport_error(reason)
+          error
       end
     else
       {:error, reason} ->
-        transport_error(reason)
+        {:error, {:transport, reason}}
     end
   end
 
   defp normalize_start_opts(opts) do
-    opts =
-      opts
-      |> Keyword.put_new(:task_supervisor, AmpSdk.TaskSupervisor)
-      |> Keyword.put_new(:event_tag, @core_event_tag)
-      |> Keyword.put_new(:headless_timeout_ms, AmpSdk.Defaults.transport_headless_timeout_ms())
+    task_supervisor = Keyword.get_lazy(opts, :task_supervisor, &default_task_supervisor/0)
 
-    case CoreOptions.new(opts) do
-      {:ok, options} -> {:ok, options}
-      {:error, {:invalid_transport_options, reason}} -> {:error, {:invalid_options, reason}}
+    opts
+    |> Keyword.put(:task_supervisor, task_supervisor)
+    |> Keyword.put_new(:event_tag, @core_event_tag)
+    |> Keyword.put_new(:headless_timeout_ms, AmpSdk.Defaults.transport_headless_timeout_ms())
+  end
+
+  defp default_task_supervisor do
+    case Application.ensure_all_started(:amp_sdk) do
+      {:ok, _started_apps} -> AmpSdk.TaskSupervisor
+      {:error, _reason} -> CliSubprocessCore.TaskSupervisor
     end
   end
 
-  defp build_bootstrap_subscriber(nil, _options), do: {:ok, nil, nil}
+  defp build_bootstrap_subscriber(nil, _opts), do: {:ok, nil, nil}
 
-  defp build_bootstrap_subscriber({pid, tag}, %CoreOptions{} = options)
+  defp build_bootstrap_subscriber({pid, tag}, opts)
        when is_pid(pid) and is_reference(tag) do
-    {:ok, proxy, core_ref} = SubscriberProxy.start(pid, tag, options.max_stderr_buffer_size)
+    max_size =
+      Keyword.get(opts, :max_stderr_buffer_size, CoreOptions.default_max_stderr_buffer_size())
+
+    {:ok, proxy, core_ref} = SubscriberProxy.start(pid, tag, max_size)
     {:ok, proxy, {proxy, core_ref}}
   end
 
-  defp build_bootstrap_subscriber(subscriber, _options),
+  defp build_bootstrap_subscriber(subscriber, _opts),
     do: {:error, {:invalid_subscriber, subscriber}}
+
+  defp maybe_add_subscriber(opts, nil), do: opts
+  defp maybe_add_subscriber(opts, subscriber), do: Keyword.put(opts, :subscriber, subscriber)
 
   defp maybe_attach_bootstrap_proxy(nil, _transport), do: :ok
 
@@ -289,44 +264,6 @@ defmodule AmpSdk.Transport.Erlexec do
 
   defp maybe_stop_bootstrap_proxy(nil), do: :ok
   defp maybe_stop_bootstrap_proxy(proxy) when is_pid(proxy), do: SubscriberProxy.stop(proxy)
-
-  defp start_core_transport(mode, %CoreOptions{} = options, nil) do
-    core_start(mode, core_start_opts(options))
-  end
-
-  defp start_core_transport(mode, %CoreOptions{} = options, core_subscriber) do
-    core_start(mode, Keyword.put(core_start_opts(options), :subscriber, core_subscriber))
-  end
-
-  defp core_start(:start, opts), do: CoreErlexec.start(opts)
-  defp core_start(:start_link, opts), do: CoreErlexec.start_link(opts)
-
-  defp core_start_opts(%CoreOptions{} = options) do
-    [
-      command: options.command,
-      args: options.args,
-      cwd: options.cwd,
-      env: options.env,
-      startup_mode: options.startup_mode,
-      task_supervisor: options.task_supervisor,
-      event_tag: options.event_tag,
-      headless_timeout_ms: options.headless_timeout_ms,
-      max_buffer_size: options.max_buffer_size,
-      max_stderr_buffer_size: options.max_stderr_buffer_size,
-      stderr_callback: options.stderr_callback
-    ]
-  end
-
-  defp subscribe_proxy(transport, proxy, core_ref) do
-    case legacy_reply(CoreErlexec.subscribe(transport, proxy, core_ref)) do
-      :ok ->
-        :ok
-
-      {:error, {:transport, reason}} ->
-        _ = SubscriberProxy.stop(proxy)
-        {:error, reason}
-    end
-  end
 
   defp transport_max_stderr_buffer_size(transport) when is_pid(transport) do
     case :sys.get_state(transport) do
@@ -340,6 +277,9 @@ defmodule AmpSdk.Transport.Erlexec do
 
   defp legacy_reply(:ok), do: :ok
 
+  defp legacy_reply({:ok, transport}) when is_pid(transport),
+    do: {:ok, transport}
+
   defp legacy_reply({:error, {:transport, %CoreTransportError{} = error}}),
     do: {:error, {:transport, legacy_transport_reason(error)}}
 
@@ -347,40 +287,6 @@ defmodule AmpSdk.Transport.Erlexec do
     do: {:error, {:transport, legacy_transport_reason(error)}}
 
   defp legacy_reply(other), do: other
-
-  defp safe_call(transport, message, timeout \\ @default_call_timeout)
-
-  defp safe_call(transport, message, timeout)
-       when is_pid(transport) and is_integer(timeout) and timeout >= 0 do
-    with {:ok, task} <-
-           AmpSdk.TaskSupport.async_nolink(fn ->
-             try do
-               {:ok, GenServer.call(transport, message, :infinity)}
-             catch
-               :exit, {:timeout, _} -> {:error, :timeout}
-               :exit, {:noproc, _} -> {:error, :not_connected}
-               :exit, :noproc -> {:error, :not_connected}
-               :exit, {:normal, _} -> {:error, :not_connected}
-               :exit, {:shutdown, _} -> {:error, :not_connected}
-               :exit, reason -> {:error, {:call_exit, reason}}
-             end
-           end) do
-      case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
-        {:ok, result} -> result
-        {:exit, reason} -> {:error, {:call_exit, reason}}
-        nil -> {:error, :timeout}
-      end
-    else
-      {:error, :noproc} -> {:error, :not_connected}
-      {:error, reason} -> {:error, reason}
-    end
-  catch
-    :exit, {:noproc, _} ->
-      {:error, :not_connected}
-
-    :exit, :noproc ->
-      {:error, :not_connected}
-  end
 
   def legacy_transport_reason(%CoreTransportError{
         reason: {:buffer_overflow, actual_size, _max_size}
@@ -394,7 +300,4 @@ defmodule AmpSdk.Transport.Erlexec do
 
   def legacy_transport_reason(%CoreTransportError{reason: reason}), do: reason
   def legacy_transport_reason(reason), do: reason
-
-  defp transport_error({:transport, reason}), do: {:error, {:transport, reason}}
-  defp transport_error(reason), do: {:error, {:transport, reason}}
 end
