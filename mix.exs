@@ -3,6 +3,9 @@ defmodule AmpSdk.MixProject do
 
   @version "0.4.0"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
+  @homepage_url "https://hex.pm/packages/amp_sdk"
+  @docs_url "https://hexdocs.pm/amp_sdk"
+  @cli_subprocess_core_requirement "~> 0.1.0"
 
   def project do
     [
@@ -13,11 +16,11 @@ defmodule AmpSdk.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       docs: docs(),
-      description: "An Elixir SDK for the Amp CLI — programmatic access to Amp's AI coding agent",
+      description: description(),
       package: package(),
       name: "AmpSdk",
       source_url: @source_url,
-      homepage_url: @source_url,
+      homepage_url: @homepage_url,
       dialyzer: [
         plt_add_apps: [:ex_unit],
         plt_file: {:no_warn, "priv/plts/project.plt"}
@@ -37,7 +40,11 @@ defmodule AmpSdk.MixProject do
 
   defp deps do
     [
-      workspace_dep(:cli_subprocess_core, "../cli_subprocess_core", "~> 0.1.0"),
+      workspace_dep(
+        :cli_subprocess_core,
+        "../cli_subprocess_core",
+        @cli_subprocess_core_requirement
+      ),
       {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -46,13 +53,17 @@ defmodule AmpSdk.MixProject do
     ]
   end
 
+  defp description do
+    "An Elixir SDK for the Amp CLI - programmatic access to Amp's AI coding agent."
+  end
+
   defp docs do
     [
       main: "readme",
       name: "AmpSdk",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      homepage_url: @source_url,
+      homepage_url: @homepage_url,
       assets: %{"assets" => "assets"},
       logo: "assets/amp_sdk.svg",
       extras: [
@@ -186,13 +197,16 @@ defmodule AmpSdk.MixProject do
   defp package do
     [
       name: "amp_sdk",
+      description: description(),
       licenses: ["MIT"],
       links: %{
-        "GitHub" => "https://github.com/nshkrdotcom/amp_sdk",
-        "HexDocs" => "https://hexdocs.pm/amp_sdk",
-        "Amp" => "https://ampcode.com"
+        "GitHub" => @source_url,
+        "Hex" => @homepage_url,
+        "HexDocs" => @docs_url,
+        "Amp" => "https://ampcode.com",
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       },
-      maintainers: ["NSHkr"],
+      maintainers: ["nshkrdotcom"],
       files:
         ~w(lib guides assets examples/README.md mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
     ]
