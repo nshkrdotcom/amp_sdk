@@ -563,6 +563,14 @@ Repo-local ownership is limited to CLI discovery, Amp-specific option and
 environment shaping, typed message/result projection, and the public
 thread/permission/MCP management wrappers.
 
+Phase 2B keeps Amp on the simple packaging path:
+
+- the common Amp profile stays built into `cli_subprocess_core`
+- `amp_sdk` remains the provider-specific compatibility/runtime-kit package
+  above that shared core
+- no separate ASM extension seam is introduced unless Amp later proves a real
+  richer provider-native surface that should sit above the normalized kernel
+
 ---
 
 ## Error Handling

@@ -37,7 +37,7 @@ defmodule AmpSdk.MixProject do
 
   defp deps do
     [
-      {:cli_subprocess_core, path: "../cli_subprocess_core"},
+      workspace_dep(:cli_subprocess_core, "../cli_subprocess_core", "~> 0.1.0"),
       {:jason, "~> 1.4"},
       {:ex_doc, "~> 0.40", only: :dev, runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -189,10 +189,24 @@ defmodule AmpSdk.MixProject do
       licenses: ["MIT"],
       links: %{
         "GitHub" => "https://github.com/nshkrdotcom/amp_sdk",
+        "HexDocs" => "https://hexdocs.pm/amp_sdk",
         "Amp" => "https://ampcode.com"
       },
       maintainers: ["NSHkr"],
-      files: ~w(lib mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
+      files:
+        ~w(lib guides assets examples/README.md mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
     ]
+  end
+
+  defp workspace_dep(app, path, requirement, opts \\ []) do
+    if hex_packaging?() do
+      {app, requirement, opts}
+    else
+      {app, Keyword.put(opts, :path, path)}
+    end
+  end
+
+  defp hex_packaging? do
+    Enum.any?(System.argv(), &String.starts_with?(&1, "hex."))
   end
 end
