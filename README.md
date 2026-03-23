@@ -549,6 +549,20 @@ Execution failed or hit max turns.
 | `AmpSdk.Types.MCPServer` | Typed MCP list entries from `mcp_list/1` |
 | `AmpSdk.Error` | Unified error envelope used by tuple-based APIs |
 
+### Ownership Boundary
+
+Phase 2A finished the Amp ownership cut:
+
+- `AmpSdk.Stream`, `AmpSdk.Runtime.CLI`, and `AmpSdk.Command` now sit above the
+  shared `cli_subprocess_core` session and command lanes
+- `AmpSdk.Transport.Erlexec` remains only as a public compatibility facade over
+  the shared transport layer
+- no separate Amp-owned common subprocess runtime remains in this repo
+
+Repo-local ownership is limited to CLI discovery, Amp-specific option and
+environment shaping, typed message/result projection, and the public
+thread/permission/MCP management wrappers.
+
 ---
 
 ## Error Handling
