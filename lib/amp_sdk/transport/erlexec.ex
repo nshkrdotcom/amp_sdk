@@ -3,8 +3,8 @@ defmodule AmpSdk.Transport.Erlexec do
   Amp raw transport entrypoint backed by `CliSubprocessCore.Transport`.
 
   This module preserves Amp's public transport module path and event/error
-  shapes while the shared core owns subprocess lifecycle, shutdown, task
-  supervision, and raw transport behavior.
+  shapes while the shared core owns subprocess lifecycle, late-subscriber
+  stderr replay, shutdown, task supervision, and raw transport behavior.
   """
 
   import Kernel, except: [send: 2]
@@ -59,20 +59,14 @@ defmodule AmpSdk.Transport.Erlexec do
 
   @impl AmpSdk.Transport
   def force_close(transport) when is_pid(transport) do
-    case CoreTransport.force_close(transport) |> legacy_reply() do
-      :ok -> :ok
-      {:error, {:transport, :not_connected}} -> :ok
-      {:error, _reason} = error -> error
-    end
+    CoreTransport.force_close(transport)
+    |> legacy_reply()
   end
 
   @impl AmpSdk.Transport
   def interrupt(transport) when is_pid(transport) do
-    case CoreTransport.interrupt(transport) |> legacy_reply() do
-      :ok -> :ok
-      {:error, {:transport, :not_connected}} -> :ok
-      {:error, _reason} = error -> error
-    end
+    CoreTransport.interrupt(transport)
+    |> legacy_reply()
   end
 
   @impl AmpSdk.Transport
@@ -115,6 +109,7 @@ defmodule AmpSdk.Transport.Erlexec do
     opts
     |> Keyword.put(:task_supervisor, task_supervisor)
     |> Keyword.put_new(:event_tag, @core_event_tag)
+    |> Keyword.put_new(:replay_stderr_on_subscribe?, true)
     |> Keyword.put_new(:headless_timeout_ms, AmpSdk.Defaults.transport_headless_timeout_ms())
   end
 
@@ -168,16 +163,13 @@ defmodule AmpSdk.Transport.Erlexec do
     [{:error, legacy_transport_reason(error)}]
   end
 
-  defp map_core_event({:stderr, _chunk}), do: []
+  defp map_core_event({:stderr, chunk}) when is_binary(chunk), do: [{:stderr, chunk}]
 
   defp map_core_event({:exit, %CoreProcessExit{} = exit}) do
-    maybe_emit_stderr(exit.stderr) ++ [{:exit, exit.reason}]
+    [{:exit, exit.reason}]
   end
 
   defp map_core_event(_event), do: []
-
-  defp maybe_emit_stderr(stderr) when is_binary(stderr) and stderr != "", do: [{:stderr, stderr}]
-  defp maybe_emit_stderr(_stderr), do: []
 
   defp legacy_reply(:ok), do: :ok
 

@@ -540,7 +540,7 @@ Execution failed or hit max turns.
 | `AmpSdk.Command` | Thin Amp-specific wrapper over `CliSubprocessCore.Command.run/2` |
 | `AmpSdk.Runtime.CLI` | Session-oriented runtime kit that preserves Amp CLI invocation semantics |
 | `AmpSdk.Transport` | Behaviour defining the subprocess communication contract |
-| `AmpSdk.Transport.Erlexec` | Amp raw transport entrypoint that preserves Amp public transport event/error shapes |
+| `AmpSdk.Transport.Erlexec` | Amp raw transport entrypoint that preserves Amp public transport event/error shapes on top of the core-owned transport |
 | `AmpSdk.CLI` | CLI binary discovery across multiple install methods |
 | `AmpSdk.Threads` | Thread lifecycle management wrappers over CLI commands |
 | `AmpSdk.Types` | All structs: messages, content blocks, options, permissions, MCP config |
@@ -556,7 +556,8 @@ Phase 2A finished the Amp ownership cut:
 - `AmpSdk.Stream`, `AmpSdk.Runtime.CLI`, and `AmpSdk.Command` now sit above the
   shared `cli_subprocess_core` session and command lanes
 - `AmpSdk.Transport.Erlexec` remains as the Amp-named public transport
-  entrypoint over the shared transport layer
+  entrypoint over the shared transport layer, including core-owned late-subscriber
+  stderr replay when needed
 - no separate Amp-owned common subprocess runtime remains in this repo
 
 Repo-local ownership is limited to CLI discovery, Amp-specific option and
@@ -611,7 +612,8 @@ Amp-named public surface over the shared core transport and return tagged
 tuples like `{:error, {:transport, reason}}`; use
 `AmpSdk.Transport.error_to_error/2`
 (or `AmpSdk.Error.normalize/2`) when you want the unified envelope there as
-well.
+well. Subprocess lifecycle, exit handling, and retained-stderr replay are still
+defined in `cli_subprocess_core`.
 
 ---
 

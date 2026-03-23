@@ -11,7 +11,7 @@ defmodule AmpSdk.Transport.ErlexecTest do
     {:ok, transport} =
       Erlexec.start(
         command: sh_path(),
-        args: ["-c", "printf 'hello\\nworld\\n'"]
+        args: ["-c", "sleep 0.05; printf 'hello\\nworld\\n'"]
       )
 
     ref = make_ref()
@@ -74,6 +74,21 @@ defmodule AmpSdk.Transport.ErlexecTest do
     assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
   end
 
+  test "forwards stderr chunks before exit when the subprocess stays alive" do
+    ref = make_ref()
+
+    {:ok, _transport} =
+      Erlexec.start(
+        command: sh_path(),
+        args: ["-c", "printf 'warn' >&2; sleep 0.1"],
+        subscriber: {self(), ref}
+      )
+
+    assert_receive {:amp_sdk_transport, ^ref, {:stderr, "warn"}}, 1_000
+    refute_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 20
+    assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
+  end
+
   test "captures fast-exit stderr for subscribers that attach after start" do
     {:ok, transport} =
       Erlexec.start(
@@ -101,7 +116,8 @@ defmodule AmpSdk.Transport.ErlexecTest do
     :ok = Erlexec.subscribe(transport, self(), ref)
 
     assert_receive {:amp_sdk_transport, ^ref, {:stderr, stderr}}, 1_000
-    assert stderr == "CDEFGHIJ"
+    assert stderr == "1234567890ABCDEFGHIJ"
+    assert Erlexec.stderr(transport) == "CDEFGHIJ"
     assert_receive {:amp_sdk_transport, ^ref, {:exit, _reason}}, 1_000
   end
 
