@@ -572,6 +572,11 @@ Phase 2B keeps Amp on the simple packaging path:
 - no separate ASM extension seam is introduced unless Amp later proves a real
   richer provider-native surface that should sit above the normalized kernel
 
+If `amp_sdk` is installed alongside `agent_session_manager`, ASM reports Amp
+runtime availability in `ASM.Extensions.ProviderSDK.capability_report/0` but
+keeps `namespaces: []` because Amp currently composes through the common ASM
+surface only.
+
 ---
 
 ## Error Handling
