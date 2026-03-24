@@ -1,5 +1,5 @@
 defmodule AmpSdk.EnvTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias AmpSdk.TestSupport
   alias AmpSdk.Types.Options

@@ -4,7 +4,7 @@ defmodule AmpSdk.ErrorShapeTest do
   alias AmpSdk.{Command, Error, TestSupport}
   alias AmpSdk.Types.Options
 
-  defp write_amp_stub!(dir) do
+  defp write_command_stub!(dir) do
     script = """
     #!/usr/bin/env bash
     set -euo pipefail
@@ -14,6 +14,20 @@ defmodule AmpSdk.ErrorShapeTest do
       exit "$AMP_TEST_EXIT_CODE"
     fi
 
+    echo "ok"
+    """
+
+    TestSupport.write_executable!(dir, "amp_error_command_stub", script)
+  end
+
+  defp write_stream_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Amp streaming sessions write prompt/input over stdin before the CLI emits JSON.
+    cat > /dev/null || true
+
     if [ -n "${AMP_TEST_OUTPUT_JSON:-}" ]; then
       echo "$AMP_TEST_OUTPUT_JSON"
     else
@@ -21,12 +35,12 @@ defmodule AmpSdk.ErrorShapeTest do
     fi
     """
 
-    TestSupport.write_executable!(dir, "amp_error_stub", script)
+    TestSupport.write_executable!(dir, "amp_error_stream_stub", script)
   end
 
   test "Command.run returns AmpSdk.Error on process failure" do
     dir = TestSupport.tmp_dir!("amp_error_shape")
-    amp_path = write_amp_stub!(dir)
+    amp_path = write_command_stub!(dir)
 
     try do
       TestSupport.with_env(
@@ -49,7 +63,7 @@ defmodule AmpSdk.ErrorShapeTest do
 
   test "AmpSdk.run returns AmpSdk.Error when stream emits error result" do
     dir = TestSupport.tmp_dir!("amp_error_shape_run")
-    amp_path = write_amp_stub!(dir)
+    amp_path = write_stream_stub!(dir)
 
     error_json =
       Jason.encode!(%{
