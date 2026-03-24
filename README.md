@@ -551,7 +551,7 @@ Execution failed or hit max turns.
 
 ### Ownership Boundary
 
-The final Phase 3 boundary for Amp is:
+The final Phase 4 boundary for Amp is:
 
 - `AmpSdk.Stream`, `AmpSdk.Runtime.CLI`, and `AmpSdk.Command` now sit above the
   shared `cli_subprocess_core` session and command lanes

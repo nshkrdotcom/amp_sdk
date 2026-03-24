@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Release docs and package-facing notes now describe the final Phase 3 boundary
+- Release docs and package-facing notes now describe the final Phase 4 boundary
   explicitly: `cli_subprocess_core` owns Amp subprocess lifecycle and
   `erlexec`, while `amp_sdk` stays focused on Amp-specific invocation,
   projection, and management surfaces.
