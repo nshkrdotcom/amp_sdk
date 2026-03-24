@@ -7,8 +7,6 @@ defmodule AmpSdk.Runtime.CLITest do
   alias AmpSdk.Types.{Options, Permission}
   alias CliSubprocessCore.{Event, Payload, ProcessExit}
 
-  @runtime_event_tag :cli_subprocess_core_session
-
   defp write_runtime_stub!(dir) do
     script = """
     #!/usr/bin/env bash
@@ -54,7 +52,8 @@ defmodule AmpSdk.Runtime.CLITest do
                    )
 
           assert info.provider == :amp
-          assert info.session_event_tag == @runtime_event_tag
+          assert info.session_event_tag == CLI.session_event_tag()
+          assert info.delivery.tagged_event_tag == CLI.session_event_tag()
           assert info.runtime.provider == :amp
           assert info.invocation.command == stub_path
           assert info.invocation.cwd == File.cwd!()

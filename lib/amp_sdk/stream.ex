@@ -5,7 +5,6 @@ defmodule AmpSdk.Stream do
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.Event, as: CoreEvent
 
-  @runtime_event_tag :cli_subprocess_core_session
   @session_close_grace_ms 2_000
   @session_kill_grace_ms 250
 
@@ -21,12 +20,14 @@ defmodule AmpSdk.Stream do
       :session,
       :session_ref,
       :session_monitor_ref,
+      :session_event_tag,
       :projection_state,
       :receive_timeout_ms
     ]
     defstruct session: nil,
               session_ref: nil,
               session_monitor_ref: nil,
+              session_event_tag: nil,
               projection_state: nil,
               done?: false,
               temp_dir: nil,
@@ -39,6 +40,7 @@ defmodule AmpSdk.Stream do
             session: pid(),
             session_ref: reference(),
             session_monitor_ref: reference(),
+            session_event_tag: atom(),
             projection_state: map(),
             done?: boolean(),
             temp_dir: String.t() | nil,
@@ -63,10 +65,11 @@ defmodule AmpSdk.Stream do
     session_ref = make_ref()
 
     case CLI.start_session(input: input, options: options, subscriber: {self(), session_ref}) do
-      {:ok, session, %{projection_state: projection_state, temp_dir: temp_dir}} ->
+      {:ok, session, %{info: info, projection_state: projection_state, temp_dir: temp_dir}} ->
         init_session(
           session,
           session_ref,
+          resolve_session_event_tag(info),
           projection_state,
           temp_dir,
           input,
@@ -88,6 +91,7 @@ defmodule AmpSdk.Stream do
   defp init_session(
          session,
          session_ref,
+         session_event_tag,
          projection_state,
          temp_dir,
          input,
@@ -102,6 +106,7 @@ defmodule AmpSdk.Stream do
         session: session,
         session_ref: session_ref,
         session_monitor_ref: session_monitor_ref,
+        session_event_tag: session_event_tag,
         projection_state: projection_state,
         temp_dir: temp_dir,
         receive_timeout_ms: timeout_ms,
@@ -144,8 +149,8 @@ defmodule AmpSdk.Stream do
 
   defp receive_next(%State{} = state) do
     receive do
-      {@runtime_event_tag, ref, {:event, %CoreEvent{} = event}}
-      when ref == state.session_ref ->
+      {event_tag, ref, {:event, %CoreEvent{} = event}}
+      when event_tag == state.session_event_tag and ref == state.session_ref ->
         handle_core_event(event, state)
 
       {:DOWN, monitor_ref, :process, _pid, _reason}
@@ -287,7 +292,7 @@ defmodule AmpSdk.Stream do
 
   defp cleanup(%State{} = state) do
     close_session_with_timeout(state.session, state.session_monitor_ref, @session_close_grace_ms)
-    flush_session_messages(state.session_ref, state.session_monitor_ref)
+    flush_session_messages(state.session_ref, state.session_monitor_ref, state.session_event_tag)
     cleanup_temp_dir(state.temp_dir)
     :ok
   end
@@ -302,21 +307,27 @@ defmodule AmpSdk.Stream do
 
   defp close_session_with_timeout(_session, _monitor_ref, _timeout_ms), do: :ok
 
-  defp flush_session_messages(ref, monitor_ref)
-       when is_reference(ref) and is_reference(monitor_ref) do
+  defp flush_session_messages(ref, monitor_ref, session_event_tag)
+       when is_reference(ref) and is_reference(monitor_ref) and is_atom(session_event_tag) do
     receive do
-      {@runtime_event_tag, ^ref, {:event, _event}} ->
-        flush_session_messages(ref, monitor_ref)
+      {event_tag, ^ref, {:event, _event}} when event_tag == session_event_tag ->
+        flush_session_messages(ref, monitor_ref, session_event_tag)
 
       {:DOWN, ^monitor_ref, :process, _pid, _reason} ->
-        flush_session_messages(ref, monitor_ref)
+        flush_session_messages(ref, monitor_ref, session_event_tag)
     after
       0 ->
         :ok
     end
   end
 
-  defp flush_session_messages(_ref, _monitor_ref), do: :ok
+  defp flush_session_messages(_ref, _monitor_ref, _session_event_tag), do: :ok
+
+  defp resolve_session_event_tag(info) when is_map(info) do
+    Map.get(info, :session_event_tag, CLI.session_event_tag())
+  end
+
+  defp resolve_session_event_tag(_info), do: CLI.session_event_tag()
 
   defp await_down_or_shutdown(ref, session, timeout_ms) do
     receive do

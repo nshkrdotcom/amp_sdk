@@ -1,6 +1,10 @@
 defmodule AmpSdk.Runtime.CLI do
   @moduledoc """
   Session-oriented runtime kit for the shared Amp CLI lane.
+
+  The tagged mailbox event atom is adapter detail. Higher-level callers should
+  consume `AmpSdk.Stream` or projected `AmpSdk.Types.*` messages instead of
+  treating the underlying session tag as core identity.
   """
 
   alias AmpSdk.{CLI, Env, Error, Types, Util}
@@ -14,6 +18,7 @@ defmodule AmpSdk.Runtime.CLI do
   alias CliSubprocessCore.Transport.Error, as: CoreTransportError
 
   @runtime_metadata %{lane: :amp_sdk}
+  @default_session_event_tag :amp_sdk_runtime_cli
 
   @type execute_input :: String.t() | [Types.UserInputMessage.t() | map()]
 
@@ -158,6 +163,10 @@ defmodule AmpSdk.Runtime.CLI do
 
   @spec capabilities() :: [atom()]
   def capabilities, do: CoreAmp.capabilities()
+
+  @doc false
+  @spec session_event_tag() :: atom()
+  def session_event_tag, do: @default_session_event_tag
 
   @spec new_projection_state(map()) :: map()
   def new_projection_state(info \\ %{}) when is_map(info) do
@@ -489,7 +498,7 @@ defmodule AmpSdk.Runtime.CLI do
       subscriber: Keyword.get(runtime_opts, :subscriber),
       metadata: metadata,
       session_event_tag:
-        Keyword.get(runtime_opts, :session_event_tag, :cli_subprocess_core_session),
+        Keyword.get(runtime_opts, :session_event_tag, @default_session_event_tag),
       command_spec: command_spec,
       input_mode: input_mode,
       mode: options.mode,

@@ -521,7 +521,7 @@ Execution failed or hit max turns.
 │                                                      │
 │  - Session lifecycle and provider parsing            │
 │  - Shared non-PTY command execution                  │
-│  - Shared erlexec transport implementation           │
+│  - Shared raw transport implementation               │
 │  - Common task supervision and subprocess handling   │
 └──────────────────────┬───────────────────────────────┘
                        │
