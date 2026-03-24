@@ -6,9 +6,9 @@ The Amp SDK uses a streaming architecture to deliver messages in real time as th
 
 `AmpSdk.execute/2` returns a lazy `Stream` that yields typed message structs. The stream is backed by `Stream.resource/3` — messages are produced from the shared core session API and projected back into the public Amp SDK message types, and the stream halts automatically when a final result or error is received.
 
-The stream consumer uses selective receive for runtime-tagged session messages only. This means unrelated mailbox messages in the caller process are preserved, so `execute/2` can be used safely from OTP processes that also handle other messages.
+The stream consumer uses selective receive for the internal runtime messages that belong to the active stream reference only. This means unrelated mailbox messages in the caller process are preserved, so `execute/2` can be used safely from OTP processes that also handle other messages.
 
-When a stream finishes (result, timeout, parse error, or transport error), cleanup drains remaining runtime-tagged events for that session reference. This avoids leaving stale stream events in long-lived caller mailboxes.
+When a stream finishes (result, timeout, parse error, or transport error), cleanup drains any remaining internal runtime messages for that session reference. This avoids leaving stale stream events in long-lived caller mailboxes.
 
 `execute/2` accepts either:
 - a string prompt (`--stream-json` / `--stream-json-thinking`)

@@ -69,7 +69,7 @@ defmodule AmpSdk.Stream do
         init_session(
           session,
           session_ref,
-          resolve_session_event_tag(info),
+          Map.get(info, :session_event_tag, CLI.session_event_tag()),
           projection_state,
           temp_dir,
           input,
@@ -322,12 +322,6 @@ defmodule AmpSdk.Stream do
   end
 
   defp flush_session_messages(_ref, _monitor_ref, _session_event_tag), do: :ok
-
-  defp resolve_session_event_tag(info) when is_map(info) do
-    Map.get(info, :session_event_tag, CLI.session_event_tag())
-  end
-
-  defp resolve_session_event_tag(_info), do: CLI.session_event_tag()
 
   defp await_down_or_shutdown(ref, session, timeout_ms) do
     receive do

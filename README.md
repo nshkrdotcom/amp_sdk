@@ -131,7 +131,7 @@ alias AmpSdk.Types.{AssistantMessage, ResultMessage, SystemMessage}
 end)
 ```
 
-`AmpSdk.execute/2` returns a lazy `Stream` -- messages arrive as the agent works, and the stream halts automatically when a result or error is received. Under the hood, the public stream surface is projected from a shared core session runtime, while mailbox cleanup still drains runtime-tagged events so finished/timeout streams do not leave residual messages in the caller mailbox.
+`AmpSdk.execute/2` returns a lazy `Stream` -- messages arrive as the agent works, and the stream halts automatically when a result or error is received. Under the hood, the public stream surface is projected from a shared core session runtime, while cleanup still drains internal runtime messages so finished or timed-out streams do not leave residual events in the caller mailbox.
 
 ### 3. Continue a Thread
 
@@ -803,7 +803,7 @@ MIT -- see [LICENSE](LICENSE) for details.
 ## Acknowledgments
 
 - [Sourcegraph](https://sourcegraph.com) for the [Amp](https://ampcode.com) coding agent and CLI
-- [Sasa Juric](https://github.com/sasa1977) for [erlexec](https://github.com/saleyn/erlexec), the backbone of subprocess management
+- [Sasa Juric](https://github.com/sasa1977) for [erlexec](https://github.com/saleyn/erlexec), the transport foundation used underneath `cli_subprocess_core`
 - Built to complement [claude_agent_sdk](https://github.com/nshkrdotcom/claude_agent_sdk) and [codex_sdk](https://github.com/nshkrdotcom/codex_sdk) for multi-agent Elixir workflows
 
 ---
