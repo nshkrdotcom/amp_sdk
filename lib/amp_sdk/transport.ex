@@ -1,5 +1,12 @@
 defmodule AmpSdk.Transport do
-  @moduledoc "Behaviour for the public Amp raw transport surface."
+  @moduledoc """
+  Behaviour for the public Amp raw transport surface.
+
+  `AmpSdk.Transport.Erlexec` remains the Amp-named public compatibility
+  transport entrypoint backed by `CliSubprocessCore.Transport`. The shared core
+  owns subprocess lifecycle and raw transport behavior; this module defines the
+  Amp-facing surface layered on top.
+  """
 
   alias AmpSdk.Error
 
