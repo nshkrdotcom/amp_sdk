@@ -560,7 +560,7 @@ defmodule AmpSdk.Types do
             permissions: [Permission.t()] | nil,
             labels: [String.t()] | nil,
             thinking: boolean(),
-            model_payload: CliSubprocessCore.ModelRegistry.Selection.t() | map() | nil,
+            model_payload: CliSubprocessCore.ModelRegistry.selection() | map() | nil,
             stream_timeout_ms: pos_integer(),
             max_stderr_buffer_bytes: pos_integer(),
             no_ide: boolean(),
