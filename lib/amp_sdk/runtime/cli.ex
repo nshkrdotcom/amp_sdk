@@ -441,6 +441,7 @@ defmodule AmpSdk.Runtime.CLI do
     []
     |> add_thread_args(options)
     |> add_stream_format(options, input_mode)
+    |> add_model_arg(options)
     |> add_simple_flags(options)
     |> add_mcp_config(options)
     |> add_labels(options)
@@ -501,6 +502,7 @@ defmodule AmpSdk.Runtime.CLI do
         Keyword.get(runtime_opts, :session_event_tag, @default_session_event_tag),
       command_spec: command_spec,
       input_mode: input_mode,
+      model_payload: options.model_payload,
       mode: options.mode,
       dangerously_allow_all: options.dangerously_allow_all,
       visibility: options.visibility,
@@ -534,6 +536,7 @@ defmodule AmpSdk.Runtime.CLI do
 
   defp options_from_provider_opts(opts) do
     %Options{
+      model_payload: Keyword.get(opts, :model_payload),
       mode: Keyword.get(opts, :mode, "smart"),
       dangerously_allow_all: Keyword.get(opts, :dangerously_allow_all, false),
       visibility: Keyword.get(opts, :visibility, "workspace"),
@@ -888,6 +891,15 @@ defmodule AmpSdk.Runtime.CLI do
 
   defp add_stream_format(args, _options, :json_input),
     do: args ++ ["--execute", "--stream-json-input"]
+
+  defp add_model_arg(args, %Options{model_payload: payload}) when is_map(payload) do
+    case Map.get(payload, :resolved_model, Map.get(payload, "resolved_model")) do
+      model when model in [nil, "", "nil", "null"] -> args
+      model -> args ++ ["--model", model]
+    end
+  end
+
+  defp add_model_arg(args, _options), do: args
 
   defp add_simple_flags(args, options) do
     args

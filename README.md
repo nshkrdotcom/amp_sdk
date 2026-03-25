@@ -816,3 +816,9 @@ MIT -- see [LICENSE](LICENSE) for details.
 | [codex_sdk](https://github.com/nshkrdotcom/codex_sdk) | Elixir SDK for Codex (OpenAI) |
 | [amp-sdk (Python)](https://pypi.org/project/amp-sdk/) | Official Python SDK by Sourcegraph |
 | [Amp CLI](https://ampcode.com) | The Amp coding agent |
+
+## Model Selection Contract
+
+`/home/home/p/g/n/amp_sdk` now renders model arguments from payloads resolved by `/home/home/p/g/n/cli_subprocess_core`. The only authoritative model-policy path is `CliSubprocessCore.ModelRegistry.resolve/3`, `CliSubprocessCore.ModelRegistry.validate/2`, and `CliSubprocessCore.ModelRegistry.default_model/2`.
+
+Amp transport code remains responsible for formatting CLI arguments only. It does not implement provider fallback policy and must not emit nil/null/blank `--model` values.
