@@ -14,6 +14,15 @@ An idiomatic Elixir SDK for [Amp](https://ampcode.com) (by Sourcegraph) -- the a
 
 > **Note:** This SDK requires the Amp CLI to be installed on the host machine. The SDK communicates with Amp exclusively through its `--execute --stream-json` interface -- no direct API calls are made.
 
+## Documentation Menu
+
+- `README.md` - installation, quick start, and runtime boundaries
+- `guides/getting-started.md` - first prompts and streams
+- `guides/configuration.md` - execution options and environment shaping
+- `guides/streaming.md` - event flow and result handling
+- `guides/threads.md` - thread lifecycle and continuation
+- `guides/testing.md` - local validation workflow
+
 ---
 
 ## What You Can Build
@@ -217,6 +226,25 @@ Manage threads directly:
 {:ok, thread_id} = AmpSdk.threads_new(visibility: :private)
 {:ok, markdown}   = AmpSdk.threads_markdown(thread_id)
 ```
+
+## Centralized Model Selection
+
+`amp_sdk` now renders model arguments from the shared
+`cli_subprocess_core` model-selection payload. It no longer infers local model
+defaults or fallback policy inside the Amp repo.
+
+Authoritative policy surface:
+
+- `CliSubprocessCore.ModelRegistry.resolve/3`
+- `CliSubprocessCore.ModelRegistry.validate/2`
+- `CliSubprocessCore.ModelRegistry.default_model/2`
+- `CliSubprocessCore.ModelRegistry.build_arg_payload/3`
+
+Amp-side responsibility is transport-only:
+
+- carry the resolved payload through `AmpSdk.Types.Options`
+- render model flags from that resolved payload only
+- never emit blank or placeholder model values
 
 ### Typed Management List APIs
 
