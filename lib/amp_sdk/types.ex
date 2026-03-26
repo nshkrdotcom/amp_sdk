@@ -651,6 +651,15 @@ defmodule AmpSdk.Types do
   def final_message?(%ErrorResultMessage{}), do: true
   def final_message?(_), do: false
 
+  @spec session_id(stream_message()) :: String.t() | nil
+  def session_id(%SystemMessage{session_id: session_id}), do: normalize_session_id(session_id)
+  def session_id(%AssistantMessage{session_id: session_id}), do: normalize_session_id(session_id)
+  def session_id(%UserMessage{session_id: session_id}), do: normalize_session_id(session_id)
+  def session_id(%ResultMessage{session_id: session_id}), do: normalize_session_id(session_id)
+
+  def session_id(%ErrorResultMessage{session_id: session_id}),
+    do: normalize_session_id(session_id)
+
   @spec create_user_message(String.t()) :: UserInputMessage.t()
   def create_user_message(text) when is_binary(text) do
     %UserInputMessage{
@@ -661,4 +670,10 @@ defmodule AmpSdk.Types do
       }
     }
   end
+
+  defp normalize_session_id(session_id)
+       when is_binary(session_id) and session_id not in ["", "nil"],
+       do: session_id
+
+  defp normalize_session_id(_session_id), do: nil
 end

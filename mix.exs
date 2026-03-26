@@ -68,42 +68,37 @@ defmodule AmpSdk.MixProject do
       assets: %{"assets" => "assets"},
       logo: "assets/amp_sdk.svg",
       extras: [
-        "README.md",
-        "guides/getting-started.md",
-        "guides/configuration.md",
-        "guides/streaming.md",
-        "guides/permissions.md",
-        "guides/threads.md",
-        "guides/error-handling.md",
-        "guides/testing.md",
-        "guides/tools-and-management.md",
-        {"examples/README.md", filename: "examples"},
-        "CHANGELOG.md",
-        "LICENSE"
+        {"README.md", title: "Overview", filename: "readme"},
+        {"guides/getting-started.md", title: "Getting Started"},
+        {"guides/configuration.md", title: "Configuration"},
+        {"guides/streaming.md", title: "Streaming"},
+        {"guides/permissions.md", title: "Permissions"},
+        {"guides/threads.md", title: "Threads"},
+        {"guides/error-handling.md", title: "Error Handling"},
+        {"guides/testing.md", title: "Testing"},
+        {"guides/tools-and-management.md", title: "Tools And Management"},
+        {"examples/README.md", title: "Examples", filename: "examples"},
+        {"CHANGELOG.md", title: "Changelog"},
+        {"LICENSE", title: "License"}
       ],
       groups_for_extras: [
-        "Getting Started": [
-          "README.md",
-          "guides/getting-started.md"
-        ],
-        Guides: [
+        "Project Overview": ["README.md"],
+        Foundations: [
+          "guides/getting-started.md",
           "guides/configuration.md",
+          "guides/permissions.md"
+        ],
+        Runtime: [
           "guides/streaming.md",
-          "guides/permissions.md",
           "guides/threads.md",
           "guides/tools-and-management.md"
         ],
-        "Testing & Errors": [
+        Quality: [
           "guides/error-handling.md",
           "guides/testing.md"
         ],
-        Examples: [
-          "examples/README.md"
-        ],
-        "Release Notes": [
-          "CHANGELOG.md",
-          "LICENSE"
-        ]
+        Examples: ["examples/README.md"],
+        Reference: ["CHANGELOG.md", "LICENSE"]
       ],
       groups_for_modules: [
         "Core API": [

@@ -169,6 +169,21 @@ defmodule AmpSdk.TypesTest do
     end
   end
 
+  describe "session_id/1" do
+    test "extracts a valid session id from stream messages" do
+      assert Types.session_id(%SystemMessage{session_id: "T-123"}) == "T-123"
+      assert Types.session_id(%AssistantMessage{session_id: "T-234"}) == "T-234"
+      assert Types.session_id(%UserMessage{session_id: "T-345"}) == "T-345"
+      assert Types.session_id(%ResultMessage{session_id: "T-456"}) == "T-456"
+      assert Types.session_id(%ErrorResultMessage{session_id: "T-567"}) == "T-567"
+    end
+
+    test "normalizes blank and placeholder session ids to nil" do
+      assert Types.session_id(%SystemMessage{session_id: ""}) == nil
+      assert Types.session_id(%ResultMessage{session_id: "nil"}) == nil
+    end
+  end
+
   describe "create_user_message/1" do
     test "creates user input message" do
       msg = Types.create_user_message("hello")

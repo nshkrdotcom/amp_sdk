@@ -14,9 +14,11 @@ thread_id =
     visibility: "private"
   })
   # Consume the full stream before using the thread so it is fully persisted.
-  |> Enum.reduce(nil, fn
-    %AmpSdk.Types.SystemMessage{session_id: id}, _acc -> id
-    _msg, acc -> acc
+  |> Enum.reduce(nil, fn message, acc ->
+    case AmpSdk.Types.session_id(message) do
+      nil -> acc
+      id -> id
+    end
   end)
 
 if is_nil(thread_id) do

@@ -11,9 +11,11 @@ thread_id =
     dangerously_allow_all: true,
     visibility: "private"
   })
-  |> Enum.reduce(nil, fn
-    %AmpSdk.Types.SystemMessage{session_id: id}, _acc -> id
-    _msg, acc -> acc
+  |> Enum.reduce(nil, fn message, acc ->
+    case AmpSdk.Types.session_id(message) do
+      nil -> acc
+      id -> id
+    end
   end)
 
 case thread_id do

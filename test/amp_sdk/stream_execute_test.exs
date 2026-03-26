@@ -2,7 +2,7 @@ defmodule AmpSdk.StreamExecuteTest do
   use ExUnit.Case, async: false
 
   alias AmpSdk.TestSupport
-  alias AmpSdk.Types.{ErrorResultMessage, Options, ResultMessage}
+  alias AmpSdk.Types.{ErrorResultMessage, Options, ResultMessage, SystemMessage}
 
   defp write_stream_stub!(dir) do
     script = """
@@ -187,6 +187,39 @@ defmodule AmpSdk.StreamExecuteTest do
 
         assert [%ResultMessage{result: "mailbox-ok"}] = messages
         assert_received {:unrelated_message, ^marker}
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "execute/2 emits a system message before a terminal result when the session id first arrives there" do
+    dir = TestSupport.tmp_dir!("amp_stream_result_session_id")
+    amp_path = write_stream_stub!(dir)
+
+    output_json =
+      Jason.encode!(%{
+        type: "result",
+        subtype: "success",
+        session_id: "T-stream-session",
+        is_error: false,
+        result: "ok",
+        duration_ms: 1,
+        num_turns: 1
+      })
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        messages =
+          AmpSdk.execute("session id", %Options{
+            env: %{"AMP_TEST_OUTPUT_JSON" => output_json}
+          })
+          |> Enum.to_list()
+
+        assert [
+                 %SystemMessage{session_id: "T-stream-session"},
+                 %ResultMessage{session_id: "T-stream-session", result: "ok"}
+               ] = messages
       end)
     after
       File.rm_rf(dir)

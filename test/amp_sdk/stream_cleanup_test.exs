@@ -123,7 +123,11 @@ defmodule AmpSdk.StreamCleanupTest do
         flush_transport_messages()
 
         messages = AmpSdk.execute("hello", %Options{}) |> Enum.to_list()
-        assert [%AmpSdk.Types.ResultMessage{result: "ok"}] = messages
+
+        assert [
+                 %AmpSdk.Types.SystemMessage{session_id: "T-cleanup"},
+                 %AmpSdk.Types.ResultMessage{session_id: "T-cleanup", result: "ok"}
+               ] = messages
 
         refute_receive {:amp_sdk_transport, _ref, _event}, 200
       end)

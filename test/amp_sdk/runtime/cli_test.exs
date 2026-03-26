@@ -238,5 +238,49 @@ defmodule AmpSdk.Runtime.CLITest do
 
       assert List.last(exit_events).error =~ "code 7"
     end
+
+    test "synthesizes a system message when the first session id arrives on a result" do
+      state = CLI.new_projection_state(%{invocation: %{cwd: "/tmp/demo"}})
+
+      result_event =
+        Event.new(:result,
+          provider: :amp,
+          provider_session_id: "T-result-only",
+          raw: %{
+            "type" => "run_completed",
+            "session_id" => "T-result-only",
+            "result" => "Hello",
+            "duration_ms" => 300,
+            "num_turns" => 1
+          },
+          payload: Payload.Result.new(status: :completed, stop_reason: "done", output: %{})
+        )
+
+      assert {[system_message, result_message], state} = CLI.project_event(result_event, state)
+      assert %Types.SystemMessage{session_id: "T-result-only", cwd: "/tmp/demo"} = system_message
+      assert %Types.ResultMessage{session_id: "T-result-only", result: "Hello"} = result_message
+      assert state.system_emitted? == true
+    end
+
+    test "synthesizes a system message when the first session id arrives on an error" do
+      state = CLI.new_projection_state(%{invocation: %{cwd: "/tmp/demo"}})
+
+      error_event =
+        Event.new(:error,
+          provider: :amp,
+          provider_session_id: "T-error-only",
+          raw: %{
+            "type" => "run_failed",
+            "session_id" => "T-error-only",
+            "error" => "boom"
+          },
+          payload: Payload.Error.new(message: "boom", code: "execution_failed")
+        )
+
+      assert {[system_message, error_message], state} = CLI.project_event(error_event, state)
+      assert %Types.SystemMessage{session_id: "T-error-only", cwd: "/tmp/demo"} = system_message
+      assert %Types.ErrorResultMessage{session_id: "T-error-only", error: "boom"} = error_message
+      assert state.system_emitted? == true
+    end
   end
 end

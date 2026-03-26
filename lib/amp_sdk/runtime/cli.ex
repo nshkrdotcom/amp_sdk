@@ -322,6 +322,7 @@ defmodule AmpSdk.Runtime.CLI do
         %CoreEvent{kind: :result, payload: %Payload.Result{} = payload, raw: raw} = event,
         %ProjectionState{} = state
       ) do
+    {prefix, state} = maybe_emit_system_message(event, state)
     session_id = session_id(event, state)
 
     state = %{
@@ -363,13 +364,14 @@ defmodule AmpSdk.Runtime.CLI do
         })
       end
 
-    {[message], %{state | provider_session_id: session_id, result_received?: true}}
+    {prefix ++ [message], %{state | provider_session_id: session_id, result_received?: true}}
   end
 
   def project_event(
         %CoreEvent{kind: :error, payload: %Payload.Error{} = payload, raw: raw} = event,
         %ProjectionState{} = state
       ) do
+    {prefix, state} = maybe_emit_system_message(event, state)
     session_id = session_id(event, state)
 
     state = %{
@@ -385,7 +387,7 @@ defmodule AmpSdk.Runtime.CLI do
         state
       )
 
-    {[error],
+    {prefix ++ [error],
      %{
        state
        | provider_session_id: session_id,
