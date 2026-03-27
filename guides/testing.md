@@ -39,6 +39,10 @@ defmodule MyApp.AmpClientTest do
 end
 ```
 
+For management JSON fixtures such as `permissions_list/0` and `mcp_list/0`,
+assert both the typed fields and the preserved `extra` payload so future CLI
+fields remain non-breaking.
+
 ### Testing Message Parsing
 
 ```elixir

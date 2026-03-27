@@ -261,6 +261,10 @@ Management list functions return typed data for programmatic use:
 {:ok, servers} = AmpSdk.mcp_list()
 ```
 
+`AmpSdk.Types.PermissionRule` and `AmpSdk.Types.MCPServer` are schema-backed:
+known JSON fields are normalized through `Zoi`, forward-compatible unknown
+fields are preserved in `extra`, and `to_map/1` projects them back to wire form.
+
 ---
 
 ## Configuration Options

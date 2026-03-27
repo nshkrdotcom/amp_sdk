@@ -116,7 +116,7 @@ defmodule AmpSdk.ManagementTypedTest do
 
   test "permissions_list returns typed permission rules using JSON output" do
     output = """
-    [{"tool":"Read","action":"allow"},{"tool":"Bash","action":"ask","context":"workspace"}]
+    [{"tool":"Read","action":"allow","future_rule_flag":true},{"tool":"Bash","action":"ask","context":"workspace"}]
     """
 
     with_cli_stub(
@@ -129,6 +129,7 @@ defmodule AmpSdk.ManagementTypedTest do
 
         assert first.tool == "Read"
         assert first.action == "allow"
+        assert first.extra == %{"future_rule_flag" => true}
         refute Map.has_key?(first, :raw)
         assert second.tool == "Bash"
         assert second.action == "ask"
@@ -153,7 +154,7 @@ defmodule AmpSdk.ManagementTypedTest do
 
   test "mcp_list returns typed mcp servers using JSON output" do
     output = """
-    [{"name":"filesystem","type":"command","source":"workspace","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"]},{"name":"remote","type":"url","source":"global","url":"https://example.com/mcp"}]
+    [{"name":"filesystem","type":"command","source":"workspace","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"],"future_server_flag":"kept"},{"name":"remote","type":"url","source":"global","url":"https://example.com/mcp"}]
     """
 
     with_cli_stub(
@@ -168,6 +169,7 @@ defmodule AmpSdk.ManagementTypedTest do
         assert first.source == "workspace"
         assert first.command == "npx"
         assert first.args == ["-y", "@modelcontextprotocol/server-filesystem"]
+        assert first.extra == %{"future_server_flag" => "kept"}
         refute Map.has_key?(first, :raw)
 
         assert second.name == "remote"

@@ -135,19 +135,17 @@ defmodule AmpSdk.MCP do
   end
 
   defp parse_server(server) when is_map(server) do
-    name = Map.get(server, "name") || "unknown"
-    type = Map.get(server, "type") || "unknown"
-    source = Map.get(server, "source") || "unknown"
+    case MCPServer.parse(server) do
+      {:ok, parsed} ->
+        {:ok, parsed}
 
-    {:ok,
-     %MCPServer{
-       name: to_string(name),
-       type: to_string(type),
-       source: to_string(source),
-       command: normalize_optional_string(Map.get(server, "command")),
-       args: normalize_args(Map.get(server, "args")),
-       url: normalize_optional_string(Map.get(server, "url"))
-     }}
+      {:error, {:invalid_mcp_server, details}} ->
+        {:error,
+         Error.new(:parse_error, "Failed to parse MCP list output",
+           cause: details,
+           context: %{reason: :invalid_mcp_server, value: inspect(server)}
+         )}
+    end
   end
 
   defp parse_server(server) do
@@ -156,10 +154,4 @@ defmodule AmpSdk.MCP do
        context: %{reason: :non_map_entry, value: inspect(server)}
      )}
   end
-
-  defp normalize_optional_string(nil), do: nil
-  defp normalize_optional_string(value), do: to_string(value)
-
-  defp normalize_args(args) when is_list(args), do: Enum.map(args, &to_string/1)
-  defp normalize_args(_), do: []
 end

@@ -78,23 +78,16 @@ defmodule AmpSdk.Permissions do
   end
 
   defp parse_rule(rule) when is_map(rule) do
-    tool = Map.get(rule, "tool")
-    action = Map.get(rule, "action")
+    case PermissionRule.parse(rule) do
+      {:ok, parsed} ->
+        {:ok, parsed}
 
-    if is_binary(tool) and is_binary(action) do
-      {:ok,
-       %PermissionRule{
-         tool: tool,
-         action: action,
-         context: Map.get(rule, "context"),
-         to: Map.get(rule, "to"),
-         matches: Map.get(rule, "matches")
-       }}
-    else
-      {:error,
-       Error.new(:parse_error, "Failed to parse permissions list output",
-         context: %{reason: :missing_required_fields, value: inspect(rule)}
-       )}
+      {:error, {:invalid_permission_rule, details}} ->
+        {:error,
+         Error.new(:parse_error, "Failed to parse permissions list output",
+           cause: details,
+           context: %{reason: :invalid_permission_rule, value: inspect(rule)}
+         )}
     end
   end
 

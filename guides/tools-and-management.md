@@ -92,6 +92,9 @@ Enum.each(rules, fn rule -> IO.puts("#{rule.action} #{rule.tool}") end)
 {:ok, _} = AmpSdk.permissions_add("Bash", "allow")
 ```
 
+Permission list entries are now schema-backed. Unknown JSON fields are preserved
+in `AmpSdk.Types.PermissionRule.extra` for forward compatibility.
+
 See the [Permissions guide](permissions.md) for creating inline permission rules via `Options.permissions`.
 
 ## MCP Servers
@@ -125,6 +128,8 @@ Enum.each(servers, fn server -> IO.puts("#{server.name} [#{server.type}]") end)
 # Remove a server
 {:ok, _} = AmpSdk.mcp_remove("filesystem")
 ```
+
+MCP list entries follow the same contract via `AmpSdk.Types.MCPServer.extra`.
 
 ### MCP OAuth
 
