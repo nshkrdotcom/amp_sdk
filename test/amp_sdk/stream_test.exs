@@ -68,6 +68,11 @@ defmodule AmpSdk.StreamTest do
       assert "--stream-json-input" in args
       refute "--stream-json" in args
     end
+
+    test "does not emit --model from model_payload on the current execute surface" do
+      args = AmpStream.build_args(%Options{model_payload: %{resolved_model: "amp-1"}})
+      refute "--model" in args
+    end
   end
 
   describe "build_settings_file/1" do

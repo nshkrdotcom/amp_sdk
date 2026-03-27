@@ -74,7 +74,12 @@ defmodule AmpSdk.Runtime.CLI do
     def handle_exit(reason, state), do: CoreAmp.handle_exit(reason, state)
 
     @impl true
-    def transport_options(opts), do: CoreAmp.transport_options(opts)
+    def transport_options(opts) when is_list(opts) do
+      close_stdin_on_start? = Keyword.get(opts, :input_mode, :prompt) == :prompt
+
+      CoreAmp.transport_options(opts)
+      |> Keyword.put(:close_stdin_on_start?, close_stdin_on_start?)
+    end
   end
 
   @type start_option ::
@@ -97,6 +102,7 @@ defmodule AmpSdk.Runtime.CLI do
          {:ok, settings_path, temp_dir} <- build_settings_file(options) do
       session_opts =
         build_session_options(
+          input,
           input_mode,
           options,
           command_spec,
@@ -412,18 +418,17 @@ defmodule AmpSdk.Runtime.CLI do
       %CommandSpec{} = command_spec when input_mode in [:prompt, :json_input] ->
         options = options_from_provider_opts(opts)
 
-        args =
-          options
-          |> build_args(input_mode)
-          |> maybe_add_settings(Keyword.get(opts, :settings_path))
+        with {:ok, args} <- build_invocation_args(options, input_mode, opts) do
+          args = maybe_add_settings(args, Keyword.get(opts, :settings_path))
 
-        {:ok,
-         CliSubprocessCore.Command.new(
-           command_spec.program,
-           CLI.command_args(command_spec, args),
-           cwd: Keyword.get(opts, :cwd, File.cwd!()),
-           env: Keyword.get(opts, :env, %{})
-         )}
+          {:ok,
+           CliSubprocessCore.Command.new(
+             command_spec.program,
+             CLI.command_args(command_spec, args),
+             cwd: Keyword.get(opts, :cwd, File.cwd!()),
+             env: Keyword.get(opts, :env, %{})
+           )}
+        end
 
       %CommandSpec{} ->
         {:error, {:invalid_input_mode, input_mode}}
@@ -443,7 +448,6 @@ defmodule AmpSdk.Runtime.CLI do
     []
     |> add_thread_args(options)
     |> add_stream_format(options, input_mode)
-    |> add_model_arg(options)
     |> add_simple_flags(options)
     |> add_mcp_config(options)
     |> add_labels(options)
@@ -485,6 +489,7 @@ defmodule AmpSdk.Runtime.CLI do
   end
 
   defp build_session_options(
+         input,
          input_mode,
          %Options{} = options,
          %CommandSpec{} = command_spec,
@@ -495,43 +500,76 @@ defmodule AmpSdk.Runtime.CLI do
       @runtime_metadata
       |> Map.merge(Keyword.get(runtime_opts, :metadata, %{}))
 
-    base_opts = [
-      provider: :amp,
-      profile: Profile,
-      subscriber: Keyword.get(runtime_opts, :subscriber),
-      metadata: metadata,
-      session_event_tag:
-        Keyword.get(runtime_opts, :session_event_tag, @default_session_event_tag),
-      command_spec: command_spec,
-      input_mode: input_mode,
-      model_payload: options.model_payload,
-      mode: options.mode,
-      dangerously_allow_all: options.dangerously_allow_all,
-      visibility: options.visibility,
-      log_level: options.log_level,
-      log_file: options.log_file,
-      continue_thread: options.continue_thread,
-      mcp_config: options.mcp_config,
-      labels: options.labels,
-      thinking: options.thinking,
-      settings_path: settings_path,
-      cwd: options.cwd || File.cwd!(),
-      env: build_env(options),
-      headless_timeout_ms: :infinity,
-      max_stderr_buffer_size: options.max_stderr_buffer_bytes,
-      permissions: options.permissions,
-      skills: options.skills,
-      no_ide: options.no_ide,
-      no_notifications: options.no_notifications,
-      no_color: options.no_color,
-      no_jetbrains: options.no_jetbrains
-    ]
+    base_opts =
+      [
+        provider: :amp,
+        profile: Profile,
+        subscriber: Keyword.get(runtime_opts, :subscriber),
+        metadata: metadata,
+        session_event_tag:
+          Keyword.get(runtime_opts, :session_event_tag, @default_session_event_tag),
+        command_spec: command_spec,
+        input_mode: input_mode,
+        model_payload: options.model_payload,
+        mode: options.mode,
+        dangerously_allow_all: options.dangerously_allow_all,
+        visibility: options.visibility,
+        log_level: options.log_level,
+        log_file: options.log_file,
+        continue_thread: options.continue_thread,
+        mcp_config: options.mcp_config,
+        labels: options.labels,
+        thinking: options.thinking,
+        settings_path: settings_path,
+        cwd: options.cwd || File.cwd!(),
+        env: build_env(options),
+        headless_timeout_ms: :infinity,
+        max_stderr_buffer_size: options.max_stderr_buffer_bytes,
+        permissions: options.permissions,
+        skills: options.skills,
+        no_ide: options.no_ide,
+        no_notifications: options.no_notifications,
+        no_color: options.no_color,
+        no_jetbrains: options.no_jetbrains
+      ]
+      |> maybe_put_prompt(input_mode, input)
 
     case Keyword.get(runtime_opts, :transport_module) do
       nil -> base_opts
       transport_module -> Keyword.put(base_opts, :transport_module, transport_module)
     end
   end
+
+  defp build_invocation_args(%Options{} = options, input_mode, opts) do
+    with {:ok, args} <- maybe_embed_prompt(build_args(options, input_mode), input_mode, opts) do
+      {:ok, args}
+    end
+  end
+
+  defp maybe_embed_prompt(args, :json_input, _opts), do: {:ok, args}
+
+  defp maybe_embed_prompt(args, :prompt, opts) do
+    case Keyword.get(opts, :prompt) do
+      prompt when is_binary(prompt) and prompt != "" ->
+        {:ok, inject_execute_prompt(args, prompt)}
+
+      _other ->
+        {:error, {:missing_option, :prompt}}
+    end
+  end
+
+  defp inject_execute_prompt(["--execute" | rest], prompt), do: ["--execute", prompt | rest]
+
+  defp inject_execute_prompt([arg | rest], prompt),
+    do: [arg | inject_execute_prompt(rest, prompt)]
+
+  defp inject_execute_prompt([], _prompt), do: raise(ArgumentError, "missing --execute flag")
+
+  defp maybe_put_prompt(opts, :prompt, prompt) when is_binary(prompt) and prompt != "" do
+    Keyword.put(opts, :prompt, prompt)
+  end
+
+  defp maybe_put_prompt(opts, _input_mode, _input), do: opts
 
   defp input_mode(input) when is_binary(input), do: :prompt
   defp input_mode(input) when is_list(input), do: :json_input
@@ -893,15 +931,6 @@ defmodule AmpSdk.Runtime.CLI do
 
   defp add_stream_format(args, _options, :json_input),
     do: args ++ ["--execute", "--stream-json-input"]
-
-  defp add_model_arg(args, %Options{model_payload: payload}) when is_map(payload) do
-    case Map.get(payload, :resolved_model, Map.get(payload, "resolved_model")) do
-      model when model in [nil, "", "nil", "null"] -> args
-      model -> args ++ ["--model", model]
-    end
-  end
-
-  defp add_model_arg(args, _options), do: args
 
   defp add_simple_flags(args, options) do
     args

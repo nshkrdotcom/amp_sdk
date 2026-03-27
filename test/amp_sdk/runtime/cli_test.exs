@@ -64,7 +64,9 @@ defmodule AmpSdk.Runtime.CLITest do
           assert "threads" in args
           assert "continue" in args
           assert "T-abc123" in args
-          assert "--execute" in args
+          execute_idx = Enum.find_index(args, &(&1 == "--execute"))
+          assert is_integer(execute_idx)
+          assert Enum.at(args, execute_idx + 1) == "hello from runtime"
           assert "--stream-json-thinking" in args
           assert "--visibility" in args
           assert "--log-level" in args
@@ -93,6 +95,15 @@ defmodule AmpSdk.Runtime.CLITest do
       after
         File.rm_rf(dir)
       end
+    end
+  end
+
+  describe "Profile.transport_options/1" do
+    test "closes stdin on start only for prompt mode" do
+      assert CLI.Profile.transport_options(input_mode: :prompt)[:close_stdin_on_start?] == true
+
+      assert CLI.Profile.transport_options(input_mode: :json_input)[:close_stdin_on_start?] ==
+               false
     end
   end
 

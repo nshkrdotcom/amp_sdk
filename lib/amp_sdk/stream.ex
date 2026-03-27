@@ -100,8 +100,7 @@ defmodule AmpSdk.Stream do
        ) do
     session_monitor_ref = Process.monitor(session)
 
-    with :ok <- send_initial_input(session, input),
-         :ok <- end_input(session) do
+    with :ok <- prime_initial_input(session, input) do
       %State{
         session: session,
         session_ref: session_ref,
@@ -117,6 +116,15 @@ defmodule AmpSdk.Stream do
         _ = CLI.close(session)
         cleanup_temp_dir(temp_dir)
         {:error, Error.normalize(reason, kind: :stream_start_failed)}
+    end
+  end
+
+  defp prime_initial_input(_session, input) when is_binary(input), do: :ok
+
+  defp prime_initial_input(session, input) when is_list(input) do
+    with :ok <- send_initial_input(session, input),
+         :ok <- end_input(session) do
+      :ok
     end
   end
 

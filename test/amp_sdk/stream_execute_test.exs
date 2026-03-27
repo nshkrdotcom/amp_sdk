@@ -27,6 +27,27 @@ defmodule AmpSdk.StreamExecuteTest do
     TestSupport.write_executable!(dir, "amp_stream_stub", script)
   end
 
+  defp write_prompt_arg_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [ -n "${AMP_TEST_ARGS_FILE:-}" ]; then
+      printf '%s\n' "$@" > "$AMP_TEST_ARGS_FILE"
+    fi
+
+    if [ -n "${AMP_TEST_STDIN_FILE:-}" ]; then
+      cat > "$AMP_TEST_STDIN_FILE"
+    else
+      cat > /dev/null || true
+    fi
+
+    echo '{"type":"result","subtype":"success","is_error":false,"result":"ok","duration_ms":1,"num_turns":1}'
+    """
+
+    TestSupport.write_executable!(dir, "amp_stream_prompt_arg_stub", script)
+  end
+
   defp write_stderr_exit_stub!(dir) do
     script = """
     #!/usr/bin/env bash
@@ -88,6 +109,41 @@ defmodule AmpSdk.StreamExecuteTest do
         stdin = File.read!(stdin_file)
         assert stdin =~ "\"type\":\"user\""
         assert stdin =~ "hello from test"
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "execute/2 embeds prompt input in argv and keeps stdin empty" do
+    dir = TestSupport.tmp_dir!("amp_stream_prompt_argv")
+    args_file = Path.join(dir, "args.txt")
+    stdin_file = Path.join(dir, "stdin.txt")
+    amp_path = write_prompt_arg_stub!(dir)
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        messages =
+          AmpSdk.execute("hello from prompt", %Options{
+            env: %{
+              "AMP_TEST_ARGS_FILE" => args_file,
+              "AMP_TEST_STDIN_FILE" => stdin_file
+            }
+          })
+          |> Enum.to_list()
+
+        assert [%ResultMessage{result: "ok"}] = messages
+
+        args =
+          args_file
+          |> File.read!()
+          |> String.split("\n", trim: true)
+
+        execute_idx = Enum.find_index(args, &(&1 == "--execute"))
+        assert is_integer(execute_idx)
+        assert Enum.at(args, execute_idx + 1) == "hello from prompt"
+        assert "--stream-json" in args
+        assert File.read!(stdin_file) == ""
       end)
     after
       File.rm_rf(dir)
