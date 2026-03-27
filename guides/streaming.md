@@ -14,6 +14,11 @@ When a stream finishes (result, timeout, parse error, or transport error), clean
 - a string prompt (`--stream-json` / `--stream-json-thinking`)
 - a list of `UserInputMessage` values (`--stream-json-input`)
 
+The public stream message structs are schema-backed. Known fields are
+normalized through `Zoi`, forward-compatible unknown fields are preserved in
+`extra`, and the message/content modules expose `to_map/1` for projection back
+to wire shape.
+
 ```
 Your App  →  AmpSdk.execute/2  →  AmpSdk.Stream  →  AmpSdk.Runtime.CLI  →  cli_subprocess_core  →  amp CLI
                                      (Stream.resource)      (session kit)        (shared runtime)      (subprocess)

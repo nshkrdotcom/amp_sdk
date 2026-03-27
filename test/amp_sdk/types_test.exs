@@ -8,6 +8,7 @@ defmodule AmpSdk.TypesTest do
     AssistantMessage,
     AssistantPayload,
     ErrorResultMessage,
+    MCPServerStatus,
     Options,
     Permission,
     ResultMessage,
@@ -40,6 +41,23 @@ defmodule AmpSdk.TypesTest do
       assert [%{name: "fs", status: "connected"}] = msg.mcp_servers
     end
 
+    test "preserves unknown fields on system init messages" do
+      json =
+        Jason.encode!(%{
+          type: "system",
+          subtype: "init",
+          session_id: "T-123",
+          cwd: "/tmp",
+          tools: ["Bash"],
+          future_flag: true,
+          mcp_servers: [%{name: "fs", status: "connected", latency_ms: 12}]
+        })
+
+      assert {:ok, %SystemMessage{} = msg} = Types.parse_stream_message(json)
+      assert msg.extra == %{"future_flag" => true}
+      assert [%MCPServerStatus{extra: %{"latency_ms" => 12}}] = msg.mcp_servers
+    end
+
     test "parses assistant message with text content" do
       json =
         Jason.encode!(%{
@@ -59,6 +77,41 @@ defmodule AmpSdk.TypesTest do
       assert [%TextContent{text: "hello"}] = msg.message.content
       assert msg.message.stop_reason == "end_turn"
       assert msg.message.usage.input_tokens == 10
+    end
+
+    test "preserves unknown fields on assistant payloads, content blocks, and usage" do
+      json =
+        Jason.encode!(%{
+          type: "assistant",
+          session_id: "T-123",
+          future_flag: true,
+          message: %{
+            role: "assistant",
+            future_payload_flag: "kept",
+            content: [
+              %{type: "text", text: "hello", annotations: ["draft"]},
+              %{
+                type: "tool_use",
+                id: "tu_1",
+                name: "Bash",
+                input: %{command: "ls"},
+                latency_ms: 8
+              }
+            ],
+            usage: %{input_tokens: 10, output_tokens: 5, cache_hit_ratio: 0.8}
+          }
+        })
+
+      assert {:ok, %AssistantMessage{} = msg} = Types.parse_stream_message(json)
+      assert msg.extra == %{"future_flag" => true}
+      assert msg.message.extra == %{"future_payload_flag" => "kept"}
+
+      assert [
+               %TextContent{extra: %{"annotations" => ["draft"]}},
+               %ToolUseContent{extra: %{"latency_ms" => 8}}
+             ] = msg.message.content
+
+      assert %Usage{extra: %{"cache_hit_ratio" => 0.8}} = msg.message.usage
     end
 
     test "parses assistant message with tool use content" do
@@ -130,6 +183,24 @@ defmodule AmpSdk.TypesTest do
       assert {:ok, %ErrorResultMessage{} = msg} = Types.parse_stream_message(json)
       assert msg.error == "something failed"
       assert msg.is_error == true
+    end
+
+    test "preserves unknown fields on result messages" do
+      json =
+        Jason.encode!(%{
+          type: "result",
+          subtype: "success",
+          session_id: "T-123",
+          result: "done",
+          duration_ms: 1500,
+          num_turns: 3,
+          usage: %{input_tokens: 10, output_tokens: 5, cache_hit_ratio: 0.4},
+          future_flag: "kept"
+        })
+
+      assert {:ok, %ResultMessage{} = msg} = Types.parse_stream_message(json)
+      assert msg.extra == %{"future_flag" => "kept"}
+      assert %Usage{extra: %{"cache_hit_ratio" => 0.4}} = msg.usage
     end
 
     test "returns error for unknown type" do
@@ -217,6 +288,17 @@ defmodule AmpSdk.TypesTest do
       assert usage.input_tokens == 100
       assert usage.output_tokens == 50
       assert usage.service_tier == "default"
+    end
+
+    test "preserves unknown fields for forward compatibility" do
+      usage =
+        Usage.from_map(%{
+          "input_tokens" => 100,
+          "output_tokens" => 50,
+          "cache_hit_ratio" => 0.4
+        })
+
+      assert usage.extra == %{"cache_hit_ratio" => 0.4}
     end
   end
 

@@ -29,11 +29,29 @@ For model selection specifically, Amp is payload-only in this repo today:
 | `permissions` | `[Permission.t()]` | `nil` | Permission rules |
 | `labels` | `[String.t()]` | `nil` | Thread labels (max 20) |
 | `thinking` | `boolean()` | `false` | Use `--stream-json-thinking` for string prompts |
+| `model_payload` | `Selection.t() \| map() \| nil` | `nil` | Shared core model-selection payload |
 | `stream_timeout_ms` | `pos_integer()` | `300_000` | Stream receive timeout in milliseconds |
 | `no_ide` | `boolean()` | `false` | Disable IDE context injection (`--no-ide`) |
 | `no_notifications` | `boolean()` | `false` | Disable sound notifications (`--no-notifications`) |
 | `no_color` | `boolean()` | `false` | Disable ANSI colors (`--no-color`) |
 | `no_jetbrains` | `boolean()` | `false` | Disable JetBrains integration (`--no-jetbrains`) |
+
+## Shared Core Model Payload
+
+When you want an explicit model selection, build it through
+`cli_subprocess_core` and pass the resolved payload through `Options`:
+
+```elixir
+{:ok, payload} =
+  CliSubprocessCore.ModelRegistry.build_arg_payload(:amp, "amp-1", [])
+
+AmpSdk.run("Review this patch", %Options{model_payload: payload})
+```
+
+`AmpSdk.Types.Options.validate!/1` canonicalizes either a real
+`CliSubprocessCore.ModelRegistry.Selection` or a `Map.from_struct(payload)`
+shape back into the same selection struct. Forward-compatible extra fields stay
+attached to the payload instead of being nested under `:extra`.
 
 ## Agent Modes
 

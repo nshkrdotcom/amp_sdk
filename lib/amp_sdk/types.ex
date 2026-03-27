@@ -4,16 +4,118 @@ defmodule AmpSdk.Types do
 
   defmodule TextContent do
     @moduledoc "A text content block in a message."
-    @type t :: %__MODULE__{type: String.t(), text: String.t()}
-    @derive Jason.Encoder
-    defstruct type: "text", text: ""
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["type", "text"]
+    @schema Message.text_content()
+
+    @type t :: %__MODULE__{type: String.t(), text: String.t(), extra: map()}
+    @derive {Jason.Encoder, only: [:type, :text]}
+    defstruct type: "text", text: "", extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_text_content, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = content), do: {:ok, content}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_text_content) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "text"),
+             text: Map.get(known, "text", ""),
+             extra: extra
+           }}
+
+        {:error, {:invalid_text_content, details}} ->
+          {:error, {:invalid_text_content, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = content), do: content
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_text_content)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        type: Map.get(known, "type", "text"),
+        text: Map.get(known, "text", ""),
+        extra: extra
+      }
+    end
+
+    @spec from_map(map()) :: t()
+    def from_map(map), do: parse!(map)
   end
 
   defmodule ToolUseContent do
     @moduledoc "A tool use content block in an assistant message."
-    @type t :: %__MODULE__{type: String.t(), id: String.t(), name: String.t(), input: map()}
-    @derive Jason.Encoder
-    defstruct type: "tool_use", id: "", name: "", input: %{}
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["type", "id", "name", "input"]
+    @schema Message.tool_use_content()
+
+    @type t :: %__MODULE__{
+            type: String.t(),
+            id: String.t(),
+            name: String.t(),
+            input: map(),
+            extra: map()
+          }
+    @derive {Jason.Encoder, only: [:type, :id, :name, :input]}
+    defstruct type: "tool_use", id: "", name: "", input: %{}, extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_tool_use_content, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = content), do: {:ok, content}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_tool_use_content) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "tool_use"),
+             id: Map.get(known, "id", ""),
+             name: Map.get(known, "name", ""),
+             input: Map.get(known, "input", %{}),
+             extra: extra
+           }}
+
+        {:error, {:invalid_tool_use_content, details}} ->
+          {:error, {:invalid_tool_use_content, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = content), do: content
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_tool_use_content)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        type: Map.get(known, "type", "tool_use"),
+        id: Map.get(known, "id", ""),
+        name: Map.get(known, "name", ""),
+        input: Map.get(known, "input", %{}),
+        extra: extra
+      }
+    end
+
+    @spec from_map(map()) :: t()
+    def from_map(map), do: parse!(map)
   end
 
   defmodule ToolResultContent do
@@ -22,17 +124,114 @@ defmodule AmpSdk.Types do
             type: String.t(),
             tool_use_id: String.t(),
             content: String.t(),
-            is_error: boolean()
+            is_error: boolean(),
+            extra: map()
           }
-    @derive Jason.Encoder
-    defstruct type: "tool_result", tool_use_id: "", content: "", is_error: false
+    @derive {Jason.Encoder, only: [:type, :tool_use_id, :content, :is_error]}
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["type", "tool_use_id", "content", "is_error"]
+    @schema Message.tool_result_content()
+
+    defstruct type: "tool_result", tool_use_id: "", content: "", is_error: false, extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_tool_result_content, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = content), do: {:ok, content}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_tool_result_content) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "tool_result"),
+             tool_use_id: Map.get(known, "tool_use_id", ""),
+             content: Map.get(known, "content", ""),
+             is_error: Map.get(known, "is_error", false),
+             extra: extra
+           }}
+
+        {:error, {:invalid_tool_result_content, details}} ->
+          {:error, {:invalid_tool_result_content, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = content), do: content
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_tool_result_content)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        type: Map.get(known, "type", "tool_result"),
+        tool_use_id: Map.get(known, "tool_use_id", ""),
+        content: Map.get(known, "content", ""),
+        is_error: Map.get(known, "is_error", false),
+        extra: extra
+      }
+    end
+
+    @spec from_map(map()) :: t()
+    def from_map(map), do: parse!(map)
   end
 
   defmodule ThinkingContent do
     @moduledoc "A thinking content block in an assistant message."
-    @type t :: %__MODULE__{type: String.t(), thinking: String.t()}
-    @derive Jason.Encoder
-    defstruct type: "thinking", thinking: ""
+    @type t :: %__MODULE__{type: String.t(), thinking: String.t(), extra: map()}
+    @derive {Jason.Encoder, only: [:type, :thinking]}
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["type", "thinking"]
+    @schema Message.thinking_content()
+
+    defstruct type: "thinking", thinking: "", extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_thinking_content, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = content), do: {:ok, content}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_thinking_content) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "thinking"),
+             thinking: Map.get(known, "thinking", ""),
+             extra: extra
+           }}
+
+        {:error, {:invalid_thinking_content, details}} ->
+          {:error, {:invalid_thinking_content, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = content), do: content
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_thinking_content)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        type: Map.get(known, "type", "thinking"),
+        thinking: Map.get(known, "thinking", ""),
+        extra: extra
+      }
+    end
+
+    @spec from_map(map()) :: t()
+    def from_map(map), do: parse!(map)
   end
 
   defmodule Usage do
@@ -42,33 +241,138 @@ defmodule AmpSdk.Types do
             output_tokens: non_neg_integer(),
             cache_creation_input_tokens: non_neg_integer(),
             cache_read_input_tokens: non_neg_integer(),
-            service_tier: String.t() | nil
+            service_tier: String.t() | nil,
+            extra: map()
           }
-    @derive Jason.Encoder
+    @derive {Jason.Encoder,
+             only: [
+               :input_tokens,
+               :output_tokens,
+               :cache_creation_input_tokens,
+               :cache_read_input_tokens,
+               :service_tier
+             ]}
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields [
+      "input_tokens",
+      "output_tokens",
+      "cache_creation_input_tokens",
+      "cache_read_input_tokens",
+      "service_tier"
+    ]
+    @schema Message.usage()
+
     defstruct input_tokens: 0,
               output_tokens: 0,
               cache_creation_input_tokens: 0,
               cache_read_input_tokens: 0,
-              service_tier: nil
+              service_tier: nil,
+              extra: %{}
 
     def from_map(nil), do: nil
 
     def from_map(map) when is_map(map) do
+      parse!(map)
+    end
+
+    @spec parse(map() | t() | nil) ::
+            {:ok, t() | nil} | {:error, {:invalid_usage, CliSubprocessCore.Schema.error_detail()}}
+    def parse(nil), do: {:ok, nil}
+    def parse(%__MODULE__{} = usage), do: {:ok, usage}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_usage) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             input_tokens: Map.get(known, "input_tokens", 0),
+             output_tokens: Map.get(known, "output_tokens", 0),
+             cache_creation_input_tokens: Map.get(known, "cache_creation_input_tokens", 0),
+             cache_read_input_tokens: Map.get(known, "cache_read_input_tokens", 0),
+             service_tier: Map.get(known, "service_tier"),
+             extra: extra
+           }}
+
+        {:error, {:invalid_usage, details}} ->
+          {:error, {:invalid_usage, details}}
+      end
+    end
+
+    @spec parse!(map() | t() | nil) :: t() | nil
+    def parse!(nil), do: nil
+    def parse!(%__MODULE__{} = usage), do: usage
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_usage)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
       %__MODULE__{
-        input_tokens: map["input_tokens"] || 0,
-        output_tokens: map["output_tokens"] || 0,
-        cache_creation_input_tokens: map["cache_creation_input_tokens"] || 0,
-        cache_read_input_tokens: map["cache_read_input_tokens"] || 0,
-        service_tier: map["service_tier"]
+        input_tokens: Map.get(known, "input_tokens", 0),
+        output_tokens: Map.get(known, "output_tokens", 0),
+        cache_creation_input_tokens: Map.get(known, "cache_creation_input_tokens", 0),
+        cache_read_input_tokens: Map.get(known, "cache_read_input_tokens", 0),
+        service_tier: Map.get(known, "service_tier"),
+        extra: extra
       }
     end
   end
 
   defmodule MCPServerStatus do
     @moduledoc "Status of an MCP server connection."
-    @type t :: %__MODULE__{name: String.t(), status: String.t()}
-    @derive Jason.Encoder
-    defstruct name: "", status: ""
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["name", "status"]
+    @schema Message.mcp_server_status()
+
+    @type t :: %__MODULE__{name: String.t(), status: String.t(), extra: map()}
+    @derive {Jason.Encoder, only: [:name, :status]}
+    defstruct name: "", status: "", extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_mcp_server_status, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = status), do: {:ok, status}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_mcp_server_status) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             name: Map.get(known, "name", ""),
+             status: Map.get(known, "status", ""),
+             extra: extra
+           }}
+
+        {:error, {:invalid_mcp_server_status, details}} ->
+          {:error, {:invalid_mcp_server_status, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = status), do: status
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_mcp_server_status)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        name: Map.get(known, "name", ""),
+        status: Map.get(known, "status", ""),
+        extra: extra
+      }
+    end
+
+    @spec from_map(map()) :: t()
+    def from_map(map), do: parse!(map)
   end
 
   defmodule AssistantPayload do
@@ -80,26 +384,143 @@ defmodule AmpSdk.Types do
             content: [TextContent.t() | ThinkingContent.t() | ToolUseContent.t() | map()],
             stop_reason: String.t() | nil,
             stop_sequence: String.t() | nil,
-            usage: Usage.t() | nil
+            usage: Usage.t() | nil,
+            extra: map()
           }
-    @derive Jason.Encoder
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["id", "role", "model", "content", "stop_reason", "stop_sequence", "usage"]
+    @schema Message.assistant_payload()
+
+    @derive {Jason.Encoder,
+             only: [:id, :role, :model, :content, :stop_reason, :stop_sequence, :usage]}
     defstruct id: nil,
               role: "assistant",
               model: nil,
               content: [],
               stop_reason: nil,
               stop_sequence: nil,
-              usage: nil
+              usage: nil,
+              extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_assistant_payload, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = payload), do: {:ok, payload}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_assistant_payload) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             id: Map.get(known, "id"),
+             role: Map.get(known, "role", "assistant"),
+             model: Map.get(known, "model"),
+             content: Enum.map(Map.get(known, "content", []), &parse_assistant_content/1),
+             stop_reason: Map.get(known, "stop_reason"),
+             stop_sequence: Map.get(known, "stop_sequence"),
+             usage: Usage.parse!(Map.get(known, "usage")),
+             extra: extra
+           }}
+
+        {:error, {:invalid_assistant_payload, details}} ->
+          {:error, {:invalid_assistant_payload, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = payload), do: payload
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_assistant_payload)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        id: Map.get(known, "id"),
+        role: Map.get(known, "role", "assistant"),
+        model: Map.get(known, "model"),
+        content: Enum.map(Map.get(known, "content", []), &parse_assistant_content/1),
+        stop_reason: Map.get(known, "stop_reason"),
+        stop_sequence: Map.get(known, "stop_sequence"),
+        usage: Usage.parse!(Map.get(known, "usage")),
+        extra: extra
+      }
+    end
+
+    defp parse_assistant_content(%{"type" => "text"} = content), do: TextContent.parse!(content)
+
+    defp parse_assistant_content(%{"type" => "thinking"} = content),
+      do: ThinkingContent.parse!(content)
+
+    defp parse_assistant_content(%{"type" => "tool_use"} = content),
+      do: ToolUseContent.parse!(content)
+
+    defp parse_assistant_content(other), do: other
   end
 
   defmodule UserPayload do
     @moduledoc "Structured payload for user stream messages."
     @type t :: %__MODULE__{
             role: String.t(),
-            content: [TextContent.t() | ToolResultContent.t() | map()]
+            content: [TextContent.t() | ToolResultContent.t() | map()],
+            extra: map()
           }
-    @derive Jason.Encoder
-    defstruct role: "user", content: []
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["role", "content"]
+    @schema Message.user_payload()
+
+    @derive {Jason.Encoder, only: [:role, :content]}
+    defstruct role: "user", content: [], extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_user_payload, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = payload), do: {:ok, payload}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_user_payload) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             role: Map.get(known, "role", "user"),
+             content: Enum.map(Map.get(known, "content", []), &parse_user_content/1),
+             extra: extra
+           }}
+
+        {:error, {:invalid_user_payload, details}} ->
+          {:error, {:invalid_user_payload, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = payload), do: payload
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_user_payload)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        role: Map.get(known, "role", "user"),
+        content: Enum.map(Map.get(known, "content", []), &parse_user_content/1),
+        extra: extra
+      }
+    end
+
+    defp parse_user_content(%{"type" => "text"} = content), do: TextContent.parse!(content)
+
+    defp parse_user_content(%{"type" => "tool_result"} = content),
+      do: ToolResultContent.parse!(content)
+
+    defp parse_user_content(other), do: other
   end
 
   defmodule SystemMessage do
@@ -110,27 +531,70 @@ defmodule AmpSdk.Types do
             session_id: String.t(),
             cwd: String.t(),
             tools: [String.t()],
-            mcp_servers: [MCPServerStatus.t()]
+            mcp_servers: [MCPServerStatus.t()],
+            extra: map()
           }
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["type", "subtype", "session_id", "cwd", "tools", "mcp_servers"]
+    @schema Message.system_message()
+
     defstruct type: "system",
               subtype: "init",
               session_id: "",
               cwd: "",
               tools: [],
-              mcp_servers: []
+              mcp_servers: [],
+              extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_system_message, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = message), do: {:ok, message}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_system_message) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "system"),
+             subtype: Map.get(known, "subtype", "init"),
+             session_id: Map.get(known, "session_id", ""),
+             cwd: Map.get(known, "cwd", ""),
+             tools: Map.get(known, "tools", []),
+             mcp_servers: Enum.map(Map.get(known, "mcp_servers", []), &MCPServerStatus.parse!/1),
+             extra: extra
+           }}
+
+        {:error, {:invalid_system_message, details}} ->
+          {:error, {:invalid_system_message, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = message), do: message
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_system_message)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        type: Map.get(known, "type", "system"),
+        subtype: Map.get(known, "subtype", "init"),
+        session_id: Map.get(known, "session_id", ""),
+        cwd: Map.get(known, "cwd", ""),
+        tools: Map.get(known, "tools", []),
+        mcp_servers: Enum.map(Map.get(known, "mcp_servers", []), &MCPServerStatus.parse!/1),
+        extra: extra
+      }
+    end
 
     def from_map(map) when is_map(map) do
-      %__MODULE__{
-        type: map["type"] || "system",
-        subtype: map["subtype"] || "init",
-        session_id: map["session_id"] || "",
-        cwd: map["cwd"] || "",
-        tools: map["tools"] || [],
-        mcp_servers:
-          Enum.map(map["mcp_servers"] || [], fn s ->
-            %MCPServerStatus{name: s["name"] || "", status: s["status"] || ""}
-          end)
-      }
+      parse!(map)
     end
   end
 
@@ -140,43 +604,65 @@ defmodule AmpSdk.Types do
             type: String.t(),
             session_id: String.t(),
             message: AssistantPayload.t(),
-            parent_tool_use_id: String.t() | nil
+            parent_tool_use_id: String.t() | nil,
+            extra: map()
           }
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["type", "session_id", "message", "parent_tool_use_id"]
+    @schema Message.assistant_message()
+
     defstruct type: "assistant",
               session_id: "",
               message: %AssistantPayload{},
-              parent_tool_use_id: nil
+              parent_tool_use_id: nil,
+              extra: %{}
 
-    def from_map(map) when is_map(map) do
-      msg = map["message"] || %{}
-      content = Enum.map(msg["content"] || [], &parse_content/1)
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_assistant_message, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = message), do: {:ok, message}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_assistant_message) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "assistant"),
+             session_id: Map.get(known, "session_id", ""),
+             message: AssistantPayload.parse!(Map.get(known, "message", %{})),
+             parent_tool_use_id: Map.get(known, "parent_tool_use_id"),
+             extra: extra
+           }}
+
+        {:error, {:invalid_assistant_message, details}} ->
+          {:error, {:invalid_assistant_message, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = message), do: message
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_assistant_message)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
 
       %__MODULE__{
-        type: map["type"] || "assistant",
-        session_id: map["session_id"] || "",
-        parent_tool_use_id: map["parent_tool_use_id"],
-        message: %AssistantPayload{
-          id: msg["id"],
-          role: msg["role"] || "assistant",
-          model: msg["model"],
-          content: content,
-          stop_reason: msg["stop_reason"],
-          stop_sequence: msg["stop_sequence"],
-          usage: Usage.from_map(msg["usage"])
-        }
+        type: Map.get(known, "type", "assistant"),
+        session_id: Map.get(known, "session_id", ""),
+        message: AssistantPayload.parse!(Map.get(known, "message", %{})),
+        parent_tool_use_id: Map.get(known, "parent_tool_use_id"),
+        extra: extra
       }
     end
 
-    defp parse_content(%{"type" => "text"} = c),
-      do: %TextContent{text: c["text"] || ""}
-
-    defp parse_content(%{"type" => "thinking"} = c),
-      do: %ThinkingContent{thinking: c["thinking"] || ""}
-
-    defp parse_content(%{"type" => "tool_use"} = c),
-      do: %ToolUseContent{id: c["id"] || "", name: c["name"] || "", input: c["input"] || %{}}
-
-    defp parse_content(other), do: other
+    def from_map(map) when is_map(map) do
+      parse!(map)
+    end
   end
 
   defmodule UserMessage do
@@ -185,37 +671,65 @@ defmodule AmpSdk.Types do
             type: String.t(),
             session_id: String.t(),
             message: UserPayload.t(),
-            parent_tool_use_id: String.t() | nil
+            parent_tool_use_id: String.t() | nil,
+            extra: map()
           }
-    defstruct type: "user", session_id: "", message: %UserPayload{}, parent_tool_use_id: nil
 
-    def from_map(map) when is_map(map) do
-      msg = map["message"] || %{}
-      content = Enum.map(msg["content"] || [], &parse_content/1)
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields ["type", "session_id", "message", "parent_tool_use_id"]
+    @schema Message.user_message()
+
+    defstruct type: "user",
+              session_id: "",
+              message: %UserPayload{},
+              parent_tool_use_id: nil,
+              extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_user_message, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = message), do: {:ok, message}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_user_message) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "user"),
+             session_id: Map.get(known, "session_id", ""),
+             message: UserPayload.parse!(Map.get(known, "message", %{})),
+             parent_tool_use_id: Map.get(known, "parent_tool_use_id"),
+             extra: extra
+           }}
+
+        {:error, {:invalid_user_message, details}} ->
+          {:error, {:invalid_user_message, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = message), do: message
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_user_message)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
 
       %__MODULE__{
-        type: map["type"] || "user",
-        session_id: map["session_id"] || "",
-        parent_tool_use_id: map["parent_tool_use_id"],
-        message: %UserPayload{
-          role: msg["role"] || "user",
-          content: content
-        }
+        type: Map.get(known, "type", "user"),
+        session_id: Map.get(known, "session_id", ""),
+        message: UserPayload.parse!(Map.get(known, "message", %{})),
+        parent_tool_use_id: Map.get(known, "parent_tool_use_id"),
+        extra: extra
       }
     end
 
-    defp parse_content(%{"type" => "text"} = c),
-      do: %TextContent{text: c["text"] || ""}
-
-    defp parse_content(%{"type" => "tool_result"} = c) do
-      %ToolResultContent{
-        tool_use_id: c["tool_use_id"] || "",
-        content: c["content"] || "",
-        is_error: c["is_error"] || false
-      }
+    def from_map(map) when is_map(map) do
+      parse!(map)
     end
-
-    defp parse_content(other), do: other
   end
 
   defmodule ResultMessage do
@@ -229,8 +743,26 @@ defmodule AmpSdk.Types do
             duration_ms: non_neg_integer(),
             num_turns: non_neg_integer(),
             usage: Usage.t() | nil,
-            permission_denials: [String.t()] | nil
+            permission_denials: [String.t()] | nil,
+            extra: map()
           }
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields [
+      "type",
+      "subtype",
+      "session_id",
+      "is_error",
+      "result",
+      "duration_ms",
+      "num_turns",
+      "usage",
+      "permission_denials"
+    ]
+    @schema Message.result_message()
+
     defstruct type: "result",
               subtype: "success",
               session_id: "",
@@ -239,20 +771,61 @@ defmodule AmpSdk.Types do
               duration_ms: 0,
               num_turns: 0,
               usage: nil,
-              permission_denials: nil
+              permission_denials: nil,
+              extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_result_message, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = message), do: {:ok, message}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_result_message) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "result"),
+             subtype: Map.get(known, "subtype", "success"),
+             session_id: Map.get(known, "session_id", ""),
+             is_error: Map.get(known, "is_error", false),
+             result: Map.get(known, "result", ""),
+             duration_ms: Map.get(known, "duration_ms", 0),
+             num_turns: Map.get(known, "num_turns", 0),
+             usage: Usage.parse!(Map.get(known, "usage")),
+             permission_denials: Map.get(known, "permission_denials"),
+             extra: extra
+           }}
+
+        {:error, {:invalid_result_message, details}} ->
+          {:error, {:invalid_result_message, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = message), do: message
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_result_message)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        type: Map.get(known, "type", "result"),
+        subtype: Map.get(known, "subtype", "success"),
+        session_id: Map.get(known, "session_id", ""),
+        is_error: Map.get(known, "is_error", false),
+        result: Map.get(known, "result", ""),
+        duration_ms: Map.get(known, "duration_ms", 0),
+        num_turns: Map.get(known, "num_turns", 0),
+        usage: Usage.parse!(Map.get(known, "usage")),
+        permission_denials: Map.get(known, "permission_denials"),
+        extra: extra
+      }
+    end
 
     def from_map(map) when is_map(map) do
-      %__MODULE__{
-        type: map["type"] || "result",
-        subtype: map["subtype"] || "success",
-        session_id: map["session_id"] || "",
-        is_error: map["is_error"] || false,
-        result: map["result"] || "",
-        duration_ms: map["duration_ms"] || 0,
-        num_turns: map["num_turns"] || 0,
-        usage: Usage.from_map(map["usage"]),
-        permission_denials: map["permission_denials"]
-      }
+      parse!(map)
     end
   end
 
@@ -272,8 +845,31 @@ defmodule AmpSdk.Types do
             duration_ms: non_neg_integer(),
             num_turns: non_neg_integer(),
             usage: Usage.t() | nil,
-            permission_denials: [String.t()] | nil
+            permission_denials: [String.t()] | nil,
+            extra: map()
           }
+
+    alias AmpSdk.Schema
+    alias AmpSdk.Schema.Message
+
+    @known_fields [
+      "type",
+      "subtype",
+      "session_id",
+      "is_error",
+      "error",
+      "kind",
+      "details",
+      "exit_code",
+      "stderr",
+      "stderr_truncated?",
+      "duration_ms",
+      "num_turns",
+      "usage",
+      "permission_denials"
+    ]
+    @schema Message.error_result_message()
+
     defstruct type: "result",
               subtype: "error_during_execution",
               session_id: "",
@@ -287,25 +883,71 @@ defmodule AmpSdk.Types do
               duration_ms: 0,
               num_turns: 0,
               usage: nil,
-              permission_denials: nil
+              permission_denials: nil,
+              extra: %{}
+
+    @spec parse(map() | t()) ::
+            {:ok, t()}
+            | {:error, {:invalid_error_result_message, CliSubprocessCore.Schema.error_detail()}}
+    def parse(%__MODULE__{} = message), do: {:ok, message}
+
+    def parse(map) when is_map(map) do
+      case Schema.parse(@schema, map, :invalid_error_result_message) do
+        {:ok, parsed} ->
+          {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+          {:ok,
+           %__MODULE__{
+             type: Map.get(known, "type", "result"),
+             subtype: Map.get(known, "subtype", "error_during_execution"),
+             session_id: Map.get(known, "session_id", ""),
+             is_error: true,
+             error: Map.get(known, "error", ""),
+             kind: Map.get(known, "kind"),
+             details: Map.get(known, "details"),
+             exit_code: Map.get(known, "exit_code"),
+             stderr: Map.get(known, "stderr"),
+             stderr_truncated?: Map.get(known, "stderr_truncated?", false),
+             duration_ms: Map.get(known, "duration_ms", 0),
+             num_turns: Map.get(known, "num_turns", 0),
+             usage: Usage.parse!(Map.get(known, "usage")),
+             permission_denials: Map.get(known, "permission_denials"),
+             extra: extra
+           }}
+
+        {:error, {:invalid_error_result_message, details}} ->
+          {:error, {:invalid_error_result_message, details}}
+      end
+    end
+
+    @spec parse!(map() | t()) :: t()
+    def parse!(%__MODULE__{} = message), do: message
+
+    def parse!(map) when is_map(map) do
+      parsed = Schema.parse!(@schema, map, :invalid_error_result_message)
+      {known, extra} = Schema.split_extra(parsed, @known_fields)
+
+      %__MODULE__{
+        type: Map.get(known, "type", "result"),
+        subtype: Map.get(known, "subtype", "error_during_execution"),
+        session_id: Map.get(known, "session_id", ""),
+        is_error: true,
+        error: Map.get(known, "error", ""),
+        kind: Map.get(known, "kind"),
+        details: Map.get(known, "details"),
+        exit_code: Map.get(known, "exit_code"),
+        stderr: Map.get(known, "stderr"),
+        stderr_truncated?: Map.get(known, "stderr_truncated?", false),
+        duration_ms: Map.get(known, "duration_ms", 0),
+        num_turns: Map.get(known, "num_turns", 0),
+        usage: Usage.parse!(Map.get(known, "usage")),
+        permission_denials: Map.get(known, "permission_denials"),
+        extra: extra
+      }
+    end
 
     def from_map(map) when is_map(map) do
-      %__MODULE__{
-        type: map["type"] || "result",
-        subtype: map["subtype"] || "error_during_execution",
-        session_id: map["session_id"] || "",
-        is_error: true,
-        error: map["error"] || "",
-        kind: map["kind"],
-        details: map["details"],
-        exit_code: map["exit_code"],
-        stderr: map["stderr"],
-        stderr_truncated?: map["stderr_truncated?"] || false,
-        duration_ms: map["duration_ms"] || 0,
-        num_turns: map["num_turns"] || 0,
-        usage: Usage.from_map(map["usage"]),
-        permission_denials: map["permission_denials"]
-      }
+      parse!(map)
     end
   end
 
@@ -657,16 +1299,16 @@ defmodule AmpSdk.Types do
 
   @spec parse_message_data(map()) :: {:ok, stream_message()} | {:error, Error.t()}
   def parse_message_data(%{"type" => "result", "is_error" => true} = data) do
-    {:ok, ErrorResultMessage.from_map(data)}
+    parse_typed_message(ErrorResultMessage, data)
   end
 
   def parse_message_data(%{"type" => "result"} = data) do
-    {:ok, ResultMessage.from_map(data)}
+    parse_typed_message(ResultMessage, data)
   end
 
   def parse_message_data(%{"type" => type} = data) when is_map_key(@message_types, type) do
     module = Map.fetch!(@message_types, type)
-    {:ok, module.from_map(data)}
+    parse_typed_message(module, data)
   end
 
   def parse_message_data(%{"type" => type}) do
@@ -708,4 +1350,15 @@ defmodule AmpSdk.Types do
        do: session_id
 
   defp normalize_session_id(_session_id), do: nil
+
+  defp parse_typed_message(module, data) when is_atom(module) and is_map(data) do
+    case module.parse(data) do
+      {:ok, message} ->
+        {:ok, message}
+
+      {:error, {tag, details}} ->
+        {:error,
+         Error.new(:invalid_message, details.message, cause: tag, context: %{validation: details})}
+    end
+  end
 end

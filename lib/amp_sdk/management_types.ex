@@ -22,8 +22,8 @@ defmodule AmpSdk.Types.PermissionRule do
   Structured representation of a permission rule returned by `AmpSdk.permissions_list/1`.
   """
 
-  alias CliSubprocessCore.Schema.Conventions
   alias AmpSdk.Schema
+  alias CliSubprocessCore.Schema.Conventions
 
   @enforce_keys [:tool, :action]
   @known_fields ["tool", "action", "context", "to", "matches"]
@@ -114,8 +114,8 @@ defmodule AmpSdk.Types.MCPServer do
   Structured representation of an MCP server returned by `AmpSdk.mcp_list/1`.
   """
 
-  alias CliSubprocessCore.Schema.Conventions
   alias AmpSdk.Schema
+  alias CliSubprocessCore.Schema.Conventions
 
   @enforce_keys [:name, :type, :source]
   @known_fields ["name", "type", "source", "command", "args", "url"]

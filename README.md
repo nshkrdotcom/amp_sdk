@@ -251,6 +251,10 @@ repo today. `AmpSdk.Types.Options.validate!/1` canonicalizes a supplied payload
 when present, but if no payload was provided the Amp SDK does not invent an
 extra model fallback path of its own.
 
+When callers already have a serialized selection map, `Map.from_struct(payload)`
+is normalized back into the canonical `CliSubprocessCore.ModelRegistry.Selection`
+while preserving forward-compatible extra fields.
+
 ### Typed Management List APIs
 
 Management list functions return typed data for programmatic use:
@@ -264,6 +268,9 @@ Management list functions return typed data for programmatic use:
 `AmpSdk.Types.PermissionRule` and `AmpSdk.Types.MCPServer` are schema-backed:
 known JSON fields are normalized through `Zoi`, forward-compatible unknown
 fields are preserved in `extra`, and `to_map/1` projects them back to wire form.
+
+The same schema-backed contract now applies to the public stream message
+structs and their nested content blocks.
 
 ---
 
@@ -288,6 +295,7 @@ All execution behavior is controlled through `AmpSdk.Types.Options`:
   permissions: nil,                   # List of Permission structs
   labels: nil,                        # Thread labels (max 20, alphanumeric + hyphens)
   thinking: false,                    # Use --stream-json-thinking when prompt is a string
+  model_payload: nil,                 # Shared core Selection (or a canonicalizable map form)
   stream_timeout_ms: 300_000,         # Receive timeout for stream events
   no_ide: false,                      # Disable IDE context injection
   no_notifications: false,            # Disable notification sounds
@@ -426,6 +434,10 @@ File.write!("thread_export.md", md)
 ## Stream Message Types
 
 Every message from `execute/2` is one of these structs:
+
+These message structs and their nested content blocks are schema-backed:
+known fields are normalized through `Zoi`, forward-compatible unknown fields
+are preserved in `extra`, and `to_map/1` projects them back to wire shape.
 
 ### `SystemMessage`
 
