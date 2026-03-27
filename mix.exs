@@ -110,8 +110,7 @@ defmodule AmpSdk.MixProject do
           AmpSdk.Usage
         ],
         Transport: [
-          AmpSdk.Transport,
-          AmpSdk.Transport.Erlexec
+          AmpSdk.Transport
         ],
         Types: [
           AmpSdk.Types,
