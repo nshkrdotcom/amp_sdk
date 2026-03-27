@@ -573,7 +573,7 @@ Execution failed or hit max turns.
 | `AmpSdk.Command` | Amp-specific command adapter over `CliSubprocessCore.Command.run/2` |
 | `AmpSdk.Runtime.CLI` | Session-oriented runtime kit that preserves Amp CLI invocation semantics |
 | `AmpSdk.Transport` | Behaviour defining the subprocess communication contract |
-| `AmpSdk.Transport.Erlexec` | Amp raw transport entrypoint that preserves Amp public transport event/error shapes on top of the core-owned transport |
+| `AmpSdk.Transport` | Amp raw transport entrypoint that preserves Amp public transport event/error shapes on top of the core-owned transport |
 | `AmpSdk.CLI` | CLI binary discovery across multiple install methods |
 | `AmpSdk.Threads` | Thread lifecycle management helpers over CLI commands |
 | `AmpSdk.Types` | All structs: messages, content blocks, options, permissions, MCP config |
@@ -588,9 +588,9 @@ The final Phase 4 boundary for Amp is:
 
 - `AmpSdk.Stream`, `AmpSdk.Runtime.CLI`, and `AmpSdk.Command` now sit above the
   shared `cli_subprocess_core` session and command lanes
-- `AmpSdk.Transport.Erlexec` remains as the Amp-named public transport
-  entrypoint over the shared transport layer, including core-owned early-event
-  replay for post-start subscribers when needed
+- `AmpSdk.Transport` remains the Amp-named public transport entrypoint over the
+  shared transport layer, including core-owned early-event replay for
+  post-start subscribers when needed
 - no separate Amp-owned common subprocess runtime remains in this repo
 
 Repo-local ownership is limited to CLI discovery, Amp-specific option and
@@ -645,7 +645,7 @@ Streaming failures are surfaced inline as `ErrorResultMessage` structs:
 end)
 ```
 
-Low-level transport APIs (`AmpSdk.Transport.Erlexec`) remain available as the
+Low-level transport APIs (`AmpSdk.Transport`) remain available as the
 Amp-named public surface over the shared core transport and return tagged
 tuples like `{:error, {:transport, reason}}`; use
 `AmpSdk.Transport.error_to_error/2`
@@ -836,7 +836,7 @@ MIT -- see [LICENSE](LICENSE) for details.
 ## Acknowledgments
 
 - [Sourcegraph](https://sourcegraph.com) for the [Amp](https://ampcode.com) coding agent and CLI
-- [Sasa Juric](https://github.com/sasa1977) for [erlexec](https://github.com/saleyn/erlexec), the transport foundation used underneath `cli_subprocess_core`
+- [Sasa Juric](https://github.com/sasa1977) for the native process-management foundation used underneath `cli_subprocess_core`
 - Built to complement [claude_agent_sdk](https://github.com/nshkrdotcom/claude_agent_sdk) and [codex_sdk](https://github.com/nshkrdotcom/codex_sdk) for multi-agent Elixir workflows
 
 ---

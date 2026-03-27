@@ -11,18 +11,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Release docs and package-facing notes now describe the final Phase 4 boundary
   explicitly: `cli_subprocess_core` owns Amp subprocess lifecycle and
-  `erlexec`, while `amp_sdk` stays focused on Amp-specific invocation,
+  `built-in transport`, while `amp_sdk` stays focused on Amp-specific invocation,
   projection, and management surfaces.
 
 ## [0.4.0] - 2026-02-11
 
 ### Added
 
-- Transport `interrupt/1` callback implementation in the Erlexec transport, allowing cooperative interruption of in-flight subprocess execution.
+- Transport `interrupt/1` callback implementation in the Built-in transport transport, allowing cooperative interruption of in-flight subprocess execution.
 
 ### Fixed
 
-- Erlexec line framing now handles UTF-8 text split across chunk boundaries without dropping or corrupting multibyte characters.
+- Built-in transport line framing now handles UTF-8 text split across chunk boundaries without dropping or corrupting multibyte characters.
 - Added transport regression coverage for UTF-8 chunk-boundary decoding and interrupt behavior.
 
 ## [0.3.0] - 2026-02-11
@@ -93,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - MCP: `mcp_add/3`, `mcp_list/0`, `mcp_remove/1`, `mcp_doctor/0`, `mcp_approve/1`, `mcp_oauth_login/2`, `mcp_oauth_logout/1`, `mcp_oauth_status/1`
   - Usage: `usage/0`
 - Streaming engine (`AmpSdk.Stream`) built on `Stream.resource/3` with typed message parsing.
-- Transport layer (`AmpSdk.Transport` + `AmpSdk.Transport.Erlexec`) for subprocess lifecycle, I/O, and cleanup.
+- Transport layer (`AmpSdk.Transport` + `AmpSdk.Transport`) for subprocess lifecycle, I/O, and cleanup.
 - Command stack with CLI discovery plus internal synchronous command execution and shared wrapper routing.
 - Complete types system (`AmpSdk.Types`) including stream messages, content blocks, permission/MCP structs, and options.
 - Unified error envelope (`AmpSdk.Error`) with legacy exception modules kept in `AmpSdk.Errors`.
@@ -112,10 +112,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Stream cleanup now drains pending `{:amp_sdk_transport, ref, event}` messages for the finished stream reference, preventing mailbox residue in long-lived caller processes.
-- Command collection now flushes trailing erlexec `stdout`/`stderr`/`DOWN` messages on the normal `:DOWN` completion path (not only timeout/stop paths).
-- `AmpSdk.Transport.Erlexec` safe-call path now runs through supervised tasks (`AmpSdk.TaskSupervisor`) instead of unsupervised per-call `spawn_monitor` helpers.
+- Command collection now flushes trailing built-in transport `stdout`/`stderr`/`DOWN` messages on the normal `:DOWN` completion path (not only timeout/stop paths).
+- `AmpSdk.Transport` safe-call path now runs through supervised tasks (`AmpSdk.TaskSupervisor`) instead of unsupervised per-call `spawn_monitor` helpers.
 - CLI Node.js package resolution fallback (`require.resolve`) is now bounded by a probe timeout (`2_000ms`) to avoid indefinite `CLI.resolve/0` hangs.
-- `AmpSdk.Transport.Erlexec` startup (`start` / `start_link`) now returns consistent tagged transport errors (`{:error, {:transport, reason}}`) on startup/init failures.
+- `AmpSdk.Transport` startup (`start` / `start_link`) now returns consistent tagged transport errors (`{:error, {:transport, reason}}`) on startup/init failures.
 - Config/env normalization now drops `nil` entries for string maps, CLI env overrides, and MCP `env`/`headers` constructors instead of coercing them into empty-string values.
 - `permissions add` argument order corrected to CLI format: `<action> <tool>`.
 - `permissions_add/3` wrapper support added for `--to` and `--workspace`.
@@ -130,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Shared defaults/messages and a shared wrapper invocation helper were added to remove duplicated timeout constants and CLI invocation glue.
 - Warning cleanup and docs/examples synchronization with current CLI behavior.
 - Transport `safe_call/3` now isolates `GenServer.call/3` in a monitored helper process so timeout/error handling is contained and deterministic.
-- Headless `AmpSdk.Transport.Erlexec` instances now support idle auto-shutdown (`:headless_timeout_ms`, default `5_000`) to avoid orphaned subprocesses when no subscriber is attached.
+- Headless `AmpSdk.Transport` instances now support idle auto-shutdown (`:headless_timeout_ms`, default `5_000`) to avoid orphaned subprocesses when no subscriber is attached.
 - Exit finalization now drains stdout in bounded batches instead of unbounded single-callback loops.
 - Config option reading now uses `fetch_option/3` conflict detection and raises `%AmpSdk.Error{kind: :invalid_configuration}` on atom/string key conflicts.
 - Low-level transport errors can now be normalized with `AmpSdk.Transport.error_to_error/2`.

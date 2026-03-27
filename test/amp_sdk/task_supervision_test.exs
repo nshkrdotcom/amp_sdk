@@ -3,7 +3,7 @@ defmodule AmpSdk.TaskSupervisionTest do
   @moduletag capture_log: true
 
   alias AmpSdk.Async
-  alias AmpSdk.Transport.Erlexec
+  alias AmpSdk.Transport
 
   setup do
     on_exit(fn ->
@@ -23,24 +23,24 @@ defmodule AmpSdk.TaskSupervisionTest do
     assert is_pid(Process.whereis(AmpSdk.TaskSupervisor))
   end
 
-  test "Erlexec I/O tasks use the supervised task tree when app is stopped" do
+  test "built-in transport I/O tasks use the supervised task tree when app is stopped" do
     assert :ok = Application.stop(:amp_sdk)
     assert Process.whereis(AmpSdk.TaskSupervisor) == nil
 
     cat = System.find_executable("cat") || "cat"
-    {:ok, transport} = Erlexec.start(command: cat, args: [])
+    {:ok, transport} = Transport.start(command: cat, args: [])
 
     try do
       ref = make_ref()
 
-      assert :ok = Erlexec.subscribe(transport, self(), ref)
-      assert :ok = Erlexec.send(transport, "ping")
-      assert :ok = Erlexec.end_input(transport)
+      assert :ok = Transport.subscribe(transport, self(), ref)
+      assert :ok = Transport.send(transport, "ping")
+      assert :ok = Transport.end_input(transport)
 
       assert_receive {:amp_sdk_transport, ^ref, {:message, "ping"}}, 1_000
       assert is_pid(Process.whereis(AmpSdk.TaskSupervisor))
     after
-      Erlexec.force_close(transport)
+      Transport.force_close(transport)
     end
   end
 

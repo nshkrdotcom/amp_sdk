@@ -31,7 +31,7 @@ Use tuple returns where possible and pattern-match on `%AmpSdk.Error{}` in appli
 
 ## Low-Level Transport Errors
 
-At the low-level transport boundary (`AmpSdk.Transport.Erlexec`), the
+At the low-level transport boundary (`AmpSdk.Transport`), the
 Amp-named public transport surface over the shared core transport returns
 tagged tuples:
 

@@ -87,7 +87,6 @@ defmodule AmpSdk.Runtime.CLI do
           | {:options, Options.t()}
           | {:subscriber, pid() | {pid(), reference() | :legacy}}
           | {:metadata, map()}
-          | {:transport_module, module()}
           | {:session_event_tag, atom()}
 
   @spec start_session([start_option()]) ::
@@ -107,7 +106,7 @@ defmodule AmpSdk.Runtime.CLI do
           options,
           command_spec,
           settings_path,
-          Keyword.take(opts, [:subscriber, :metadata, :transport_module, :session_event_tag])
+          Keyword.take(opts, [:subscriber, :metadata, :session_event_tag])
         )
 
       case Session.start_session(session_opts) do
@@ -533,11 +532,6 @@ defmodule AmpSdk.Runtime.CLI do
         no_jetbrains: options.no_jetbrains
       ]
       |> maybe_put_prompt(input_mode, input)
-
-    case Keyword.get(runtime_opts, :transport_module) do
-      nil -> base_opts
-      transport_module -> Keyword.put(base_opts, :transport_module, transport_module)
-    end
   end
 
   defp build_invocation_args(%Options{} = options, input_mode, opts) do
