@@ -246,6 +246,11 @@ Amp-side responsibility is transport-only:
 - render model flags from that resolved payload only
 - never emit blank or placeholder model values
 
+Amp intentionally does not expose a second raw model-selection surface in this
+repo today. `AmpSdk.Types.Options.validate!/1` canonicalizes a supplied payload
+when present, but if no payload was provided the Amp SDK does not invent an
+extra model fallback path of its own.
+
 ### Typed Management List APIs
 
 Management list functions return typed data for programmatic use:
@@ -584,8 +589,8 @@ The final Phase 4 boundary for Amp is:
 - `AmpSdk.Stream`, `AmpSdk.Runtime.CLI`, and `AmpSdk.Command` now sit above the
   shared `cli_subprocess_core` session and command lanes
 - `AmpSdk.Transport.Erlexec` remains as the Amp-named public transport
-  entrypoint over the shared transport layer, including core-owned late-subscriber
-  stderr replay when needed
+  entrypoint over the shared transport layer, including core-owned early-event
+  replay for post-start subscribers when needed
 - no separate Amp-owned common subprocess runtime remains in this repo
 
 Repo-local ownership is limited to CLI discovery, Amp-specific option and
@@ -645,8 +650,8 @@ Amp-named public surface over the shared core transport and return tagged
 tuples like `{:error, {:transport, reason}}`; use
 `AmpSdk.Transport.error_to_error/2`
 (or `AmpSdk.Error.normalize/2`) when you want the unified envelope there as
-well. Subprocess lifecycle, exit handling, and retained-stderr replay are still
-defined in `cli_subprocess_core`.
+well. Subprocess lifecycle, exit handling, retained-stderr replay, and the
+bounded early-event replay buffer are still defined in `cli_subprocess_core`.
 
 ---
 

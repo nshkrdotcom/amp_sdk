@@ -543,6 +543,7 @@ defmodule AmpSdk.Types do
   defmodule Options do
     @moduledoc "Configuration options for an Amp CLI session."
     @stream_timeout_ms AmpSdk.Defaults.stream_timeout_ms()
+    alias CliSubprocessCore.ModelInput
 
     @type t :: %__MODULE__{
             cwd: String.t() | nil,
@@ -590,6 +591,37 @@ defmodule AmpSdk.Types do
               no_notifications: false,
               no_color: false,
               no_jetbrains: false
+
+    @spec validate!(t()) :: t()
+    def validate!(%__MODULE__{} = options) do
+      options
+      |> validate_positive_integer!(:stream_timeout_ms)
+      |> validate_positive_integer!(:max_stderr_buffer_bytes)
+      |> normalize_model_payload!()
+    end
+
+    defp normalize_model_payload!(%__MODULE__{model_payload: nil} = options), do: options
+
+    defp normalize_model_payload!(%__MODULE__{} = options) do
+      case ModelInput.normalize(:amp, %{model_payload: options.model_payload}) do
+        {:ok, normalized} ->
+          %{options | model_payload: normalized.selection}
+
+        {:error, reason} ->
+          raise ArgumentError, "model resolution failed for :amp: #{inspect(reason)}"
+      end
+    end
+
+    defp validate_positive_integer!(%__MODULE__{} = options, field) when is_atom(field) do
+      case Map.fetch!(options, field) do
+        value when is_integer(value) and value > 0 ->
+          options
+
+        value ->
+          raise ArgumentError,
+                "#{field} must be a positive integer, got: #{inspect(value)}"
+      end
+    end
   end
 
   @type stream_message ::

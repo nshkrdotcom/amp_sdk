@@ -2,6 +2,14 @@
 
 All execution behavior is controlled through the `AmpSdk.Types.Options` struct.
 
+For model selection specifically, Amp is payload-only in this repo today:
+
+- `AmpSdk.Types.Options` can carry a shared core `model_payload`
+- `AmpSdk.Types.Options.validate!/1` canonicalizes that payload when present
+- there is no separate raw model/backend option surface in `amp_sdk`
+- if no payload is supplied, the Amp SDK does not invent a repo-local model
+  fallback path
+
 ## Options Reference
 
 | Field | Type | Default | Description |

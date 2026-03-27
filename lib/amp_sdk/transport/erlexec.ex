@@ -3,8 +3,9 @@ defmodule AmpSdk.Transport.Erlexec do
   Amp raw transport entrypoint backed by `CliSubprocessCore.Transport`.
 
   This module preserves Amp's public transport module path and event/error
-  shapes while the shared core owns subprocess lifecycle, late-subscriber
-  stderr replay, shutdown, task supervision, and raw transport behavior.
+  shapes while the shared core owns subprocess lifecycle, early-event replay
+  for late subscribers, retained stderr, shutdown, task supervision, and raw
+  transport behavior.
   """
 
   import Kernel, except: [send: 2]
@@ -109,7 +110,7 @@ defmodule AmpSdk.Transport.Erlexec do
     opts
     |> Keyword.put(:task_supervisor, task_supervisor)
     |> Keyword.put_new(:event_tag, @core_event_tag)
-    |> Keyword.put_new(:replay_stderr_on_subscribe?, true)
+    |> Keyword.put_new(:buffer_events_until_subscribe?, true)
     |> Keyword.put_new(:headless_timeout_ms, AmpSdk.Defaults.transport_headless_timeout_ms())
   end
 

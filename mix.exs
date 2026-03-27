@@ -1,6 +1,7 @@
 defmodule AmpSdk.MixProject do
   use Mix.Project
 
+  @app :amp_sdk
   @version "0.4.0"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
   @homepage_url "https://hex.pm/packages/amp_sdk"
@@ -9,7 +10,7 @@ defmodule AmpSdk.MixProject do
   @cli_subprocess_core_repo "nshkrdotcom/cli_subprocess_core"
   def project do
     [
-      app: :amp_sdk,
+      app: @app,
       version: @version,
       elixir: "~> 1.14",
       elixirc_paths: elixirc_paths(Mix.env()),
@@ -21,10 +22,7 @@ defmodule AmpSdk.MixProject do
       name: "AmpSdk",
       source_url: @source_url,
       homepage_url: @homepage_url,
-      dialyzer: [
-        plt_add_apps: [:ex_unit],
-        plt_file: {:no_warn, "priv/plts/project.plt"}
-      ]
+      dialyzer: dialyzer()
     ]
   end
 
@@ -39,19 +37,14 @@ defmodule AmpSdk.MixProject do
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do
-    [
-      workspace_dep(
-        :cli_subprocess_core,
-        "../cli_subprocess_core",
-        @cli_subprocess_core_requirement,
-        github: @cli_subprocess_core_repo
-      ),
-      {:jason, "~> 1.4"},
-      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:supertester, "~> 0.5.1", only: :test}
-    ]
+    workspace_deps() ++
+      [
+        {:jason, "~> 1.4"},
+        {:ex_doc, "~> 0.40", only: :dev, runtime: false},
+        {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+        {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+        {:supertester, "~> 0.5.1", only: :test}
+      ]
   end
 
   defp description do
@@ -226,5 +219,46 @@ defmodule AmpSdk.MixProject do
 
   defp hex_packaging? do
     Enum.any?(System.argv(), &String.starts_with?(&1, "hex."))
+  end
+
+  defp dialyzer do
+    [
+      plt_add_apps: [:mix, :ex_unit],
+      plt_core_path: "priv/plts/core",
+      plt_local_path: "priv/plts",
+      plt_ignore_apps: workspace_apps(),
+      paths: [project_ebin_path() | workspace_dialyzer_paths()]
+    ]
+  end
+
+  defp workspace_deps do
+    Enum.map(workspace_dep_specs(), fn {app, path, requirement, opts} ->
+      workspace_dep(app, path, requirement, opts)
+    end)
+  end
+
+  defp workspace_dep_specs do
+    [
+      {:cli_subprocess_core, "../cli_subprocess_core", @cli_subprocess_core_requirement,
+       github: @cli_subprocess_core_repo}
+    ]
+  end
+
+  defp workspace_apps do
+    Enum.map(workspace_dep_specs(), &elem(&1, 0))
+  end
+
+  defp workspace_dialyzer_paths do
+    Enum.map(workspace_apps(), fn app ->
+      build_ebin_path(app)
+    end)
+  end
+
+  defp project_ebin_path do
+    build_ebin_path(@app)
+  end
+
+  defp build_ebin_path(app) when is_atom(app) do
+    Path.join(["_build", Atom.to_string(Mix.env()), "lib", Atom.to_string(app), "ebin"])
   end
 end

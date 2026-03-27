@@ -95,7 +95,7 @@ defmodule AmpSdk.Runtime.CLI do
           | {:error, term()}
   def start_session(opts) when is_list(opts) do
     input = Keyword.fetch!(opts, :input)
-    options = Keyword.get(opts, :options, %Options{})
+    options = opts |> Keyword.get(:options, %Options{}) |> Options.validate!()
     input_mode = input_mode(input)
 
     with {:ok, %CommandSpec{} = command_spec} <- CLI.resolve(),
@@ -593,6 +593,7 @@ defmodule AmpSdk.Runtime.CLI do
       no_color: Keyword.get(opts, :no_color, false),
       no_jetbrains: Keyword.get(opts, :no_jetbrains, false)
     }
+    |> Options.validate!()
   end
 
   defp maybe_emit_system_message(%CoreEvent{} = event, %ProjectionState{} = state) do

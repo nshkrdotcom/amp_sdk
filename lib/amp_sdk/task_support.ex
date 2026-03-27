@@ -32,6 +32,12 @@ defmodule AmpSdk.TaskSupport do
     end
   end
 
+  @spec await(Task.t(), timeout(), :brutal_kill | :shutdown) ::
+          {:ok, term()} | {:exit, term()} | {:error, :timeout}
+  def await(task, timeout \\ 5_000, shutdown \\ :brutal_kill) do
+    CoreTaskSupport.await(task, timeout, shutdown)
+  end
+
   defp ensure_started_for(@default_supervisor) do
     case Application.ensure_all_started(:amp_sdk) do
       {:ok, _started_apps} -> :ok
