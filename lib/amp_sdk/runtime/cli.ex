@@ -499,39 +499,38 @@ defmodule AmpSdk.Runtime.CLI do
       @runtime_metadata
       |> Map.merge(Keyword.get(runtime_opts, :metadata, %{}))
 
-    base_opts =
-      [
-        provider: :amp,
-        profile: Profile,
-        subscriber: Keyword.get(runtime_opts, :subscriber),
-        metadata: metadata,
-        session_event_tag:
-          Keyword.get(runtime_opts, :session_event_tag, @default_session_event_tag),
-        command_spec: command_spec,
-        input_mode: input_mode,
-        model_payload: options.model_payload,
-        mode: options.mode,
-        dangerously_allow_all: options.dangerously_allow_all,
-        visibility: options.visibility,
-        log_level: options.log_level,
-        log_file: options.log_file,
-        continue_thread: options.continue_thread,
-        mcp_config: options.mcp_config,
-        labels: options.labels,
-        thinking: options.thinking,
-        settings_path: settings_path,
-        cwd: options.cwd || File.cwd!(),
-        env: build_env(options),
-        headless_timeout_ms: :infinity,
-        max_stderr_buffer_size: options.max_stderr_buffer_bytes,
-        permissions: options.permissions,
-        skills: options.skills,
-        no_ide: options.no_ide,
-        no_notifications: options.no_notifications,
-        no_color: options.no_color,
-        no_jetbrains: options.no_jetbrains
-      ]
-      |> maybe_put_prompt(input_mode, input)
+    [
+      provider: :amp,
+      profile: Profile,
+      subscriber: Keyword.get(runtime_opts, :subscriber),
+      metadata: metadata,
+      session_event_tag:
+        Keyword.get(runtime_opts, :session_event_tag, @default_session_event_tag),
+      command_spec: command_spec,
+      input_mode: input_mode,
+      model_payload: options.model_payload,
+      mode: options.mode,
+      dangerously_allow_all: options.dangerously_allow_all,
+      visibility: options.visibility,
+      log_level: options.log_level,
+      log_file: options.log_file,
+      continue_thread: options.continue_thread,
+      mcp_config: options.mcp_config,
+      labels: options.labels,
+      thinking: options.thinking,
+      settings_path: settings_path,
+      cwd: options.cwd || File.cwd!(),
+      env: build_env(options),
+      headless_timeout_ms: :infinity,
+      max_stderr_buffer_size: options.max_stderr_buffer_bytes,
+      permissions: options.permissions,
+      skills: options.skills,
+      no_ide: options.no_ide,
+      no_notifications: options.no_notifications,
+      no_color: options.no_color,
+      no_jetbrains: options.no_jetbrains
+    ]
+    |> maybe_put_prompt(input_mode, input)
   end
 
   defp build_invocation_args(%Options{} = options, input_mode, opts) do
