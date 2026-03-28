@@ -9,8 +9,8 @@ defmodule AmpSdk.Runtime.CLI do
 
   alias AmpSdk.{CLI, Env, Error, Types, Util}
   alias AmpSdk.Types.Options
-  alias CliSubprocessCore.Event, as: CoreEvent
   alias CliSubprocessCore.CommandSpec
+  alias CliSubprocessCore.Event, as: CoreEvent
   alias CliSubprocessCore.Payload
   alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
   alias CliSubprocessCore.ProviderProfiles.Amp, as: CoreAmp

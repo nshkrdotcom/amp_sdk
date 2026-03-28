@@ -4,9 +4,9 @@ defmodule AmpSdk.Command do
   """
 
   alias AmpSdk.{CLI, Defaults, Env, Error}
-  alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.Command, as: CoreCommand
   alias CliSubprocessCore.Command.Error, as: CoreCommandError
+  alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.ExecutionSurface
   alias CliSubprocessCore.ProcessExit
   alias CliSubprocessCore.Transport.Error, as: CoreTransportError
