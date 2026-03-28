@@ -110,9 +110,6 @@ defmodule AmpSdk.MixProject do
           AmpSdk.MCP,
           AmpSdk.Usage
         ],
-        Transport: [
-          AmpSdk.Transport
-        ],
         Types: [
           AmpSdk.Types,
           AmpSdk.Types.Options,

@@ -30,6 +30,7 @@ For model selection specifically, Amp is payload-only in this repo today:
 | `labels` | `[String.t()]` | `nil` | Thread labels (max 20) |
 | `thinking` | `boolean()` | `false` | Use `--stream-json-thinking` for string prompts |
 | `model_payload` | `Selection.t() \| map() \| nil` | `nil` | Shared core model-selection payload |
+| `execution_surface` | `ExecutionSurface.t() \| nil` | `nil` | Shared core execution surface for local or SSH placement |
 | `stream_timeout_ms` | `pos_integer()` | `300_000` | Stream receive timeout in milliseconds |
 | `no_ide` | `boolean()` | `false` | Disable IDE context injection (`--no-ide`) |
 | `no_notifications` | `boolean()` | `false` | Disable sound notifications (`--no-notifications`) |
@@ -52,6 +53,23 @@ AmpSdk.run("Review this patch", %Options{model_payload: payload})
 `CliSubprocessCore.ModelRegistry.Selection` or a `Map.from_struct(payload)`
 shape back into the same selection struct. Forward-compatible extra fields stay
 attached to the payload instead of being nested under `:extra`.
+
+## Shared Core Execution Surface
+
+When you need SSH placement or other shared-core transport routing, pass a
+`CliSubprocessCore.ExecutionSurface` through `Options.execution_surface`:
+
+```elixir
+alias AmpSdk.Types.Options
+alias CliSubprocessCore.ExecutionSurface
+
+surface = %ExecutionSurface{
+  surface_kind: :static_ssh,
+  transport_options: [destination: "build-host.example"]
+}
+
+AmpSdk.run("Inspect the remote workspace", %Options{execution_surface: surface})
+```
 
 ## Agent Modes
 

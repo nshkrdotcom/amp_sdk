@@ -1185,7 +1185,7 @@ defmodule AmpSdk.Types do
   defmodule Options do
     @moduledoc "Configuration options for an Amp CLI session."
     @stream_timeout_ms AmpSdk.Defaults.stream_timeout_ms()
-    alias CliSubprocessCore.ModelInput
+    alias CliSubprocessCore.{ExecutionSurface, ModelInput}
 
     @type t :: %__MODULE__{
             cwd: String.t() | nil,
@@ -1204,6 +1204,7 @@ defmodule AmpSdk.Types do
             labels: [String.t()] | nil,
             thinking: boolean(),
             model_payload: CliSubprocessCore.ModelRegistry.selection() | map() | nil,
+            execution_surface: ExecutionSurface.t() | nil,
             stream_timeout_ms: pos_integer(),
             max_stderr_buffer_bytes: pos_integer(),
             no_ide: boolean(),
@@ -1227,6 +1228,7 @@ defmodule AmpSdk.Types do
               labels: nil,
               thinking: false,
               model_payload: nil,
+              execution_surface: nil,
               stream_timeout_ms: @stream_timeout_ms,
               max_stderr_buffer_bytes: AmpSdk.Defaults.stream_max_stderr_buffer_bytes(),
               no_ide: false,
@@ -1240,6 +1242,19 @@ defmodule AmpSdk.Types do
       |> validate_positive_integer!(:stream_timeout_ms)
       |> validate_positive_integer!(:max_stderr_buffer_bytes)
       |> normalize_model_payload!()
+      |> normalize_execution_surface!()
+    end
+
+    @spec execution_surface_opts(t()) :: keyword()
+    def execution_surface_opts(%__MODULE__{} = options) do
+      case Map.get(options, :execution_surface, nil) do
+        nil ->
+          []
+
+        %ExecutionSurface{} = surface ->
+          [transport_options: surface.transport_options] ++
+            ExecutionSurface.surface_metadata(surface)
+      end
     end
 
     defp normalize_model_payload!(%__MODULE__{model_payload: nil} = options), do: options
@@ -1251,6 +1266,34 @@ defmodule AmpSdk.Types do
 
         {:error, reason} ->
           raise ArgumentError, "model resolution failed for :amp: #{inspect(reason)}"
+      end
+    end
+
+    defp normalize_execution_surface!(%__MODULE__{} = options) do
+      case Map.get(options, :execution_surface, nil) do
+        nil ->
+          Map.put(options, :execution_surface, nil)
+
+        %ExecutionSurface{} = surface ->
+          case ExecutionSurface.new(
+                 transport_options: surface.transport_options,
+                 surface_kind: surface.surface_kind,
+                 target_id: surface.target_id,
+                 lease_ref: surface.lease_ref,
+                 surface_ref: surface.surface_ref,
+                 boundary_class: surface.boundary_class,
+                 observability: surface.observability
+               ) do
+            {:ok, %ExecutionSurface{} = normalized} ->
+              %{options | execution_surface: normalized}
+
+            {:error, reason} ->
+              raise ArgumentError, "execution_surface is invalid: #{inspect(reason)}"
+          end
+
+        execution_surface ->
+          raise ArgumentError,
+                "execution_surface must be a %CliSubprocessCore.ExecutionSurface{}, got: #{inspect(execution_surface)}"
       end
     end
 

@@ -29,23 +29,19 @@ Common `kind` values include `:cli_not_found`, `:command_timeout`, `:task_timeou
 
 Use tuple returns where possible and pattern-match on `%AmpSdk.Error{}` in application code.
 
-## Low-Level Transport Errors
+## Shared-Core Transport Errors
 
-At the low-level transport boundary (`AmpSdk.Transport`), the
-Amp-named public transport surface over the shared core transport returns
-tagged tuples:
+The SDK no longer exposes a separate Amp-owned raw transport wrapper. Shared
+core transport failures still normalize into tagged tuples or exceptions under
+the hood:
 
 ```elixir
 {:error, {:transport, reason}}
 ```
 
-This applies consistently across transport operations, including startup (`start/1`, `start_link/1`).
-
 Normalize these when you need the unified envelope:
 
 ```elixir
-error = AmpSdk.Transport.error_to_error({:transport, :timeout})
-# or:
 error = AmpSdk.Error.normalize({:transport, :timeout}, kind: :transport_error)
 ```
 

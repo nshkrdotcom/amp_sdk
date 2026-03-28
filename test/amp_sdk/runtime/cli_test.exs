@@ -5,7 +5,9 @@ defmodule AmpSdk.Runtime.CLITest do
   alias AmpSdk.TestSupport
   alias AmpSdk.Types
   alias AmpSdk.Types.{Options, Permission}
-  alias CliSubprocessCore.{Event, Payload, ProcessExit}
+  alias CliSubprocessCore.{Event, ExecutionSurface, Payload, ProcessExit}
+  alias CliSubprocessCore.TestSupport.FakeSSH
+  alias CliSubprocessCore.Transport.Error, as: CoreTransportError
 
   defp write_runtime_stub!(dir) do
     script = """
@@ -93,6 +95,52 @@ defmodule AmpSdk.Runtime.CLITest do
           File.rm_rf!(temp_dir)
         end)
       after
+        File.rm_rf(dir)
+      end
+    end
+
+    test "preserves execution_surface through the shared session lane" do
+      dir = TestSupport.tmp_dir!("amp_runtime_cli_fake_ssh")
+      stub_path = write_runtime_stub!(dir)
+      fake_ssh = FakeSSH.new!()
+      session_ref = make_ref()
+
+      options = %Options{
+        execution_surface: %ExecutionSurface{
+          surface_kind: :static_ssh,
+          transport_options:
+            FakeSSH.transport_options(fake_ssh,
+              destination: "runtime.ssh.example",
+              ssh_options: [BatchMode: "yes"]
+            ),
+          target_id: "amp-runtime-target"
+        }
+      }
+
+      try do
+        TestSupport.with_env(%{"AMP_CLI_PATH" => stub_path}, fn ->
+          assert {:ok, session, %{info: info, temp_dir: temp_dir}} =
+                   CLI.start_session(
+                     input: "hello over ssh",
+                     options: options,
+                     subscriber: {self(), session_ref}
+                   )
+
+          assert info.transport.info.surface_kind == :static_ssh
+          assert info.transport.info.target_id == "amp-runtime-target"
+          assert info.transport.info.adapter_metadata.destination == "runtime.ssh.example"
+          assert info.transport.info.adapter_metadata.ssh_path == fake_ssh.ssh_path
+
+          assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
+          assert FakeSSH.read_manifest!(fake_ssh) =~ "destination=runtime.ssh.example"
+          assert temp_dir == nil
+
+          session_monitor_ref = Process.monitor(session)
+          assert :ok = CLI.close(session)
+          assert_receive {:DOWN, ^session_monitor_ref, :process, ^session, :normal}, 2_000
+        end)
+      after
+        FakeSSH.cleanup(fake_ssh)
         File.rm_rf(dir)
       end
     end
@@ -248,6 +296,33 @@ defmodule AmpSdk.Runtime.CLITest do
                List.last(exit_events)
 
       assert List.last(exit_events).error =~ "code 7"
+    end
+
+    test "projects former transport-wrapper transport errors into typed Amp error results" do
+      state = CLI.new_projection_state(%{invocation: %{cwd: "/tmp/demo"}})
+
+      transport_error =
+        Event.new(:error,
+          provider: :amp,
+          provider_session_id: "amp-session-transport-error",
+          raw: CoreTransportError.buffer_overflow(64, 16, "aaaaaaaa"),
+          payload:
+            Payload.Error.new(
+              message: "Transport buffer exceeded 16 bytes (got 64)",
+              code: "transport_error",
+              metadata: %{actual_size: 64, max_size: 16}
+            )
+        )
+
+      assert {[system_message, error_message], _state} = CLI.project_event(transport_error, state)
+      assert %Types.SystemMessage{session_id: "amp-session-transport-error"} = system_message
+
+      assert %Types.ErrorResultMessage{
+               session_id: "amp-session-transport-error",
+               kind: :transport_error,
+               error: "Transport error: Transport buffer exceeded 16 bytes (got 64)",
+               details: %{"actual_size" => 64, "max_size" => 16, "preview" => "aaaaaaaa"}
+             } = error_message
     end
 
     test "synthesizes a system message when the first session id arrives on a result" do

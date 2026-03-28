@@ -296,6 +296,7 @@ All execution behavior is controlled through `AmpSdk.Types.Options`:
   labels: nil,                        # Thread labels (max 20, alphanumeric + hyphens)
   thinking: false,                    # Use --stream-json-thinking when prompt is a string
   model_payload: nil,                 # Shared core Selection (or a canonicalizable map form)
+  execution_surface: nil,             # Optional CliSubprocessCore.ExecutionSurface
   stream_timeout_ms: 300_000,         # Receive timeout for stream events
   no_ide: false,                      # Disable IDE context injection
   no_notifications: false,            # Disable notification sounds
@@ -588,9 +589,7 @@ Execution failed or hit max turns.
 | `AmpSdk.Stream` | Stream engine -- manages lifecycle and projects shared runtime events |
 | `AmpSdk.Command` | Amp-specific command adapter over `CliSubprocessCore.Command.run/2` |
 | `AmpSdk.Runtime.CLI` | Session-oriented runtime kit that preserves Amp CLI invocation semantics |
-| `AmpSdk.Transport` | Behaviour defining the subprocess communication contract |
-| `AmpSdk.Transport` | Amp raw transport entrypoint that preserves Amp public transport event/error shapes on top of the core-owned transport |
-| `AmpSdk.CLI` | CLI binary discovery across multiple install methods |
+| `AmpSdk.CLI` | Amp CLI resolution wrapper over `CliSubprocessCore.ProviderCLI` |
 | `AmpSdk.Threads` | Thread lifecycle management helpers over CLI commands |
 | `AmpSdk.Types` | All structs: messages, content blocks, options, permissions, MCP config |
 | `AmpSdk.Types.ThreadSummary` | Typed thread list entries from `threads_list/1` |
@@ -604,14 +603,13 @@ The final Phase 4 boundary for Amp is:
 
 - `AmpSdk.Stream`, `AmpSdk.Runtime.CLI`, and `AmpSdk.Command` now sit above the
   shared `cli_subprocess_core` session and command lanes
-- `AmpSdk.Transport` remains the Amp-named public transport entrypoint over the
-  shared transport layer, including core-owned early-event replay for
-  post-start subscribers when needed
-- no separate Amp-owned common subprocess runtime remains in this repo
+- no separate Amp-owned transport wrapper or common subprocess runtime remains
+  in this repo
 
-Repo-local ownership is limited to CLI discovery, Amp-specific option and
-environment shaping, typed message/result projection, and the public
-thread/permission/MCP management helpers.
+Repo-local ownership is limited to the Amp-facing CLI/runtime wrapper,
+execution-surface preservation, Amp-specific option and environment shaping,
+typed message/result projection, and the public thread/permission/MCP
+management helpers.
 
 The release and composition model is:
 
@@ -661,13 +659,12 @@ Streaming failures are surfaced inline as `ErrorResultMessage` structs:
 end)
 ```
 
-Low-level transport APIs (`AmpSdk.Transport`) remain available as the
-Amp-named public surface over the shared core transport and return tagged
-tuples like `{:error, {:transport, reason}}`; use
-`AmpSdk.Transport.error_to_error/2`
-(or `AmpSdk.Error.normalize/2`) when you want the unified envelope there as
-well. Subprocess lifecycle, exit handling, retained-stderr replay, and the
-bounded early-event replay buffer are still defined in `cli_subprocess_core`.
+Execution and transport failures are normalized directly into
+`%AmpSdk.Error{}` or inline `ErrorResultMessage` structs. If you need the
+shared-core transport envelope itself, use `AmpSdk.Error.normalize/2` against
+the returned reason tuple or exception. Subprocess lifecycle, exit handling,
+retained-stderr capture, and execution-surface routing are defined in
+`cli_subprocess_core`.
 
 ---
 

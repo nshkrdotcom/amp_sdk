@@ -1,6 +1,7 @@
 defmodule AmpSdk.StreamCleanupTest do
   use ExUnit.Case, async: false
 
+  alias AmpSdk.Runtime.CLI
   alias AmpSdk.TestSupport
   alias AmpSdk.Types.{Options, Permission}
 
@@ -61,8 +62,10 @@ defmodule AmpSdk.StreamCleanupTest do
   end
 
   defp flush_transport_messages do
+    session_event_tag = CLI.session_event_tag()
+
     receive do
-      {:amp_sdk_transport, _ref, _event} ->
+      {^session_event_tag, _ref, {:event, _event}} ->
         flush_transport_messages()
     after
       0 ->
@@ -121,6 +124,7 @@ defmodule AmpSdk.StreamCleanupTest do
     try do
       TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
         flush_transport_messages()
+        session_event_tag = CLI.session_event_tag()
 
         messages = AmpSdk.execute("hello", %Options{}) |> Enum.to_list()
 
@@ -129,7 +133,7 @@ defmodule AmpSdk.StreamCleanupTest do
                  %AmpSdk.Types.ResultMessage{session_id: "T-cleanup", result: "ok"}
                ] = messages
 
-        refute_receive {:amp_sdk_transport, _ref, _event}, 200
+        refute_receive {^session_event_tag, _ref, {:event, _event}}, 200
       end)
     after
       File.rm_rf(dir)
@@ -149,6 +153,7 @@ defmodule AmpSdk.StreamCleanupTest do
     try do
       TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
         flush_transport_messages()
+        session_event_tag = CLI.session_event_tag()
 
         messages = AmpSdk.execute("hello", opts) |> Enum.to_list()
         assert [%AmpSdk.Types.ErrorResultMessage{} = msg] = messages
@@ -158,7 +163,7 @@ defmodule AmpSdk.StreamCleanupTest do
         pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
         assert TestSupport.wait_until(fn -> not process_alive?(pid) end, 4_000) == :ok
 
-        refute_receive {:amp_sdk_transport, _ref, _event}, 200
+        refute_receive {^session_event_tag, _ref, {:event, _event}}, 200
       end)
     after
       File.rm_rf(dir)

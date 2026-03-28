@@ -4,9 +4,10 @@ defmodule AmpSdk.Command do
   """
 
   alias AmpSdk.{CLI, Defaults, Env, Error}
-  alias AmpSdk.CLI.CommandSpec
+  alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.Command, as: CoreCommand
   alias CliSubprocessCore.Command.Error, as: CoreCommandError
+  alias CliSubprocessCore.ExecutionSurface
   alias CliSubprocessCore.ProcessExit
   alias CliSubprocessCore.Transport.Error, as: CoreTransportError
   alias CliSubprocessCore.Transport.RunResult
@@ -18,6 +19,7 @@ defmodule AmpSdk.Command do
           | {:trim_output, boolean()}
           | {:cd, String.t()}
           | {:env, map() | keyword()}
+          | {:execution_surface, ExecutionSurface.t()}
 
   @spec run([String.t()], [run_opt()]) :: {:ok, String.t()} | {:error, Error.t()}
   def run(args, opts \\ []) when is_list(args) and is_list(opts) do
@@ -41,16 +43,14 @@ defmodule AmpSdk.Command do
         env: Env.build_cli_env(normalize_env(Keyword.get(opts, :env)))
       )
 
-    case CoreCommand.run(invocation,
-           stdin: Keyword.get(opts, :stdin),
-           timeout: timeout,
-           stderr: stderr_mode(stderr_to_stdout)
-         ) do
-      {:ok, %RunResult{} = result} ->
-        handle_run_result(result, trim_output, stderr_to_stdout, command.program, command_args)
+    with {:ok, core_run_opts} <- build_core_run_opts(opts, timeout, stderr_to_stdout) do
+      case CoreCommand.run(invocation, core_run_opts) do
+        {:ok, %RunResult{} = result} ->
+          handle_run_result(result, trim_output, stderr_to_stdout, command.program, command_args)
 
-      {:error, %CoreCommandError{} = error} ->
-        {:error, translate_command_error(error, timeout, command.program, command_args)}
+        {:error, %CoreCommandError{} = error} ->
+          {:error, translate_command_error(error, timeout, command.program, command_args)}
+      end
     end
   end
 
@@ -109,6 +109,22 @@ defmodule AmpSdk.Command do
   defp stderr_mode(true), do: :stdout
   defp stderr_mode(false), do: :separate
 
+  defp build_core_run_opts(opts, timeout, stderr_to_stdout) do
+    base_opts = [
+      stdin: Keyword.get(opts, :stdin),
+      timeout: timeout,
+      stderr: stderr_mode(stderr_to_stdout)
+    ]
+
+    case execution_surface_opts(Keyword.get(opts, :execution_surface)) do
+      {:ok, surface_opts} ->
+        {:ok, Keyword.merge(base_opts, surface_opts)}
+
+      {:error, %Error{} = error} ->
+        {:error, error}
+    end
+  end
+
   defp command_output(%RunResult{} = result, true), do: result.output
   defp command_output(%RunResult{} = result, false), do: result.stdout <> result.stderr
 
@@ -124,6 +140,23 @@ defmodule AmpSdk.Command do
 
   defp normalize_env(nil), do: %{}
   defp normalize_env(env) when is_map(env) or is_list(env), do: Env.normalize_overrides(env)
+
+  defp execution_surface_opts(nil), do: {:ok, []}
+
+  defp execution_surface_opts(%ExecutionSurface{} = execution_surface) do
+    {:ok,
+     [transport_options: execution_surface.transport_options] ++
+       ExecutionSurface.surface_metadata(execution_surface)}
+  end
+
+  defp execution_surface_opts(execution_surface) do
+    {:error,
+     Error.new(
+       :invalid_configuration,
+       "execution_surface must be a %CliSubprocessCore.ExecutionSurface{}",
+       cause: execution_surface
+     )}
+  end
 
   defp format_reason(%_{} = exception) when is_exception(exception),
     do: Exception.message(exception)

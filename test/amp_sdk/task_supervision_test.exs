@@ -3,7 +3,6 @@ defmodule AmpSdk.TaskSupervisionTest do
   @moduletag capture_log: true
 
   alias AmpSdk.Async
-  alias AmpSdk.Transport
 
   setup do
     on_exit(fn ->
@@ -16,32 +15,12 @@ defmodule AmpSdk.TaskSupervisionTest do
   end
 
   test "Async.run_with_timeout/2 restarts the supervised task tree when app is stopped" do
+    assert {:ok, _} = Application.ensure_all_started(:amp_sdk)
     assert :ok = Application.stop(:amp_sdk)
     assert Process.whereis(AmpSdk.TaskSupervisor) == nil
 
     assert {:ok, :ok} = Async.run_with_timeout(fn -> :ok end, 500)
     assert is_pid(Process.whereis(AmpSdk.TaskSupervisor))
-  end
-
-  test "built-in transport I/O tasks use the supervised task tree when app is stopped" do
-    assert :ok = Application.stop(:amp_sdk)
-    assert Process.whereis(AmpSdk.TaskSupervisor) == nil
-
-    cat = System.find_executable("cat") || "cat"
-    {:ok, transport} = Transport.start(command: cat, args: [])
-
-    try do
-      ref = make_ref()
-
-      assert :ok = Transport.subscribe(transport, self(), ref)
-      assert :ok = Transport.send(transport, "ping")
-      assert :ok = Transport.end_input(transport)
-
-      assert_receive {:amp_sdk_transport, ^ref, {:message, "ping"}}, 1_000
-      assert is_pid(Process.whereis(AmpSdk.TaskSupervisor))
-    after
-      Transport.force_close(transport)
-    end
   end
 
   defp erase_fallback_supervisor do

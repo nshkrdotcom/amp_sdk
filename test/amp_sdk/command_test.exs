@@ -4,6 +4,8 @@ defmodule AmpSdk.CommandTest do
   alias AmpSdk.Command
   alias AmpSdk.Error
   alias AmpSdk.TestSupport
+  alias CliSubprocessCore.{CommandSpec, ExecutionSurface}
+  alias CliSubprocessCore.TestSupport.FakeSSH
 
   defp write_amp_stub!(dir) do
     script = """
@@ -19,6 +21,7 @@ defmodule AmpSdk.CommandTest do
     fi
 
     if [ -n "${AMP_TEST_STDIN_FILE:-}" ]; then
+      mkdir -p "$(dirname "$AMP_TEST_STDIN_FILE")"
       cat > "$AMP_TEST_STDIN_FILE"
     fi
 
@@ -226,7 +229,7 @@ defmodule AmpSdk.CommandTest do
 
   test "run/3 validates invalid stdin before attempting to run the executable" do
     command =
-      %AmpSdk.CLI.CommandSpec{
+      %CommandSpec{
         program: System.find_executable("sh") || "/bin/sh",
         argv_prefix: ["-c", "cat > /dev/null"]
       }
@@ -267,6 +270,43 @@ defmodule AmpSdk.CommandTest do
         end
       )
     after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "run/2 preserves execution_surface through the shared command lane" do
+    dir = TestSupport.tmp_dir!("amp_command_fake_ssh")
+    args_file = Path.join(dir, "args.txt")
+    amp_path = write_amp_stub!(dir)
+    fake_ssh = FakeSSH.new!()
+
+    try do
+      TestSupport.with_env(
+        %{
+          "AMP_CLI_PATH" => amp_path,
+          "AMP_TEST_ARGS_FILE" => args_file,
+          "AMP_TEST_OUTPUT" => "ssh-done"
+        },
+        fn ->
+          execution_surface = %ExecutionSurface{
+            surface_kind: :static_ssh,
+            transport_options:
+              FakeSSH.transport_options(fake_ssh, destination: "amp.command.example")
+          }
+
+          assert {:ok, "ssh-done"} =
+                   Command.run(["threads", "list"], execution_surface: execution_surface)
+
+          assert File.read!(args_file) == "threads\nlist\n"
+          assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
+
+          manifest = FakeSSH.read_manifest!(fake_ssh)
+          assert manifest =~ "destination=amp.command.example"
+          assert manifest =~ "remote_command="
+        end
+      )
+    after
+      FakeSSH.cleanup(fake_ssh)
       File.rm_rf(dir)
     end
   end

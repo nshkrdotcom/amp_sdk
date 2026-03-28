@@ -2,9 +2,9 @@ defmodule AmpSdk.CLITest do
   use ExUnit.Case, async: false
 
   alias AmpSdk.CLI
-  alias AmpSdk.CLI.CommandSpec
   alias AmpSdk.Error
   alias AmpSdk.TestSupport
+  alias CliSubprocessCore.CommandSpec
 
   describe "resolve/0" do
     test "finds amp via AMP_CLI_PATH env var" do

@@ -6,6 +6,7 @@ defmodule AmpSdk.CLIInvoke do
   @type invoke_opt ::
           {:timeout, non_neg_integer() | :infinity}
           | {:stdin, iodata()}
+          | {:execution_surface, CliSubprocessCore.ExecutionSurface.t()}
           | {:default_timeout_ms, pos_integer()}
 
   @type invoke_result :: {:ok, String.t()} | {:error, Error.t()}
@@ -14,7 +15,7 @@ defmodule AmpSdk.CLIInvoke do
   def invoke(args, opts \\ []) when is_list(args) and is_list(opts) do
     run_opts =
       opts
-      |> Keyword.take([:timeout])
+      |> Keyword.take([:timeout, :execution_surface])
       |> Util.maybe_put_kw(:stdin, Keyword.get(opts, :stdin))
 
     case Keyword.get(opts, :default_timeout_ms) do

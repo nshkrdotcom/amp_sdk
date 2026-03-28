@@ -3,6 +3,8 @@ defmodule AmpSdk.StreamExecuteTest do
 
   alias AmpSdk.TestSupport
   alias AmpSdk.Types.{ErrorResultMessage, Options, ResultMessage, SystemMessage}
+  alias CliSubprocessCore.ExecutionSurface
+  alias CliSubprocessCore.TestSupport.FakeSSH
 
   defp write_stream_stub!(dir) do
     script = """
@@ -167,6 +169,55 @@ defmodule AmpSdk.StreamExecuteTest do
         assert error.error =~ "Timed out"
       end)
     after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "execute/2 preserves execution_surface through the shared stream lane" do
+    dir = TestSupport.tmp_dir!("amp_stream_fake_ssh")
+    amp_path = write_stream_stub!(dir)
+    fake_ssh = FakeSSH.new!()
+
+    output_json =
+      Jason.encode!(%{
+        type: "result",
+        subtype: "success",
+        session_id: "T-stream-ssh",
+        is_error: false,
+        result: "ssh-ok",
+        duration_ms: 1,
+        num_turns: 1
+      })
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        execution_surface = %ExecutionSurface{
+          surface_kind: :static_ssh,
+          transport_options:
+            FakeSSH.transport_options(fake_ssh, destination: "amp.stream.example"),
+          target_id: "amp-stream-target"
+        }
+
+        messages =
+          AmpSdk.execute("hello over ssh", %Options{
+            execution_surface: execution_surface,
+            env: %{"AMP_TEST_OUTPUT_JSON" => output_json}
+          })
+          |> Enum.to_list()
+
+        assert [
+                 %SystemMessage{session_id: "T-stream-ssh"},
+                 %ResultMessage{session_id: "T-stream-ssh", result: "ssh-ok"}
+               ] = messages
+
+        assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
+
+        manifest = FakeSSH.read_manifest!(fake_ssh)
+        assert manifest =~ "destination=amp.stream.example"
+        assert manifest =~ "remote_command="
+      end)
+    after
+      FakeSSH.cleanup(fake_ssh)
       File.rm_rf(dir)
     end
   end

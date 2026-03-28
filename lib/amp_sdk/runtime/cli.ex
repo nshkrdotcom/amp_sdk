@@ -8,9 +8,9 @@ defmodule AmpSdk.Runtime.CLI do
   """
 
   alias AmpSdk.{CLI, Env, Error, Types, Util}
-  alias AmpSdk.CLI.CommandSpec
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.Event, as: CoreEvent
+  alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.Payload
   alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
   alias CliSubprocessCore.ProviderProfiles.Amp, as: CoreAmp
@@ -531,6 +531,7 @@ defmodule AmpSdk.Runtime.CLI do
       no_jetbrains: options.no_jetbrains
     ]
     |> maybe_put_prompt(input_mode, input)
+    |> Keyword.merge(Options.execution_surface_opts(options))
   end
 
   defp build_invocation_args(%Options{} = options, input_mode, opts) do
@@ -581,6 +582,7 @@ defmodule AmpSdk.Runtime.CLI do
       thinking: Keyword.get(opts, :thinking, false),
       permissions: Keyword.get(opts, :permissions),
       skills: Keyword.get(opts, :skills),
+      execution_surface: nil,
       no_ide: Keyword.get(opts, :no_ide, false),
       no_notifications: Keyword.get(opts, :no_notifications, false),
       no_color: Keyword.get(opts, :no_color, false),

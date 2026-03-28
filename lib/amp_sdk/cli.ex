@@ -1,104 +1,43 @@
 defmodule AmpSdk.CLI do
-  @moduledoc "Discovers and resolves the Amp CLI executable."
+  @moduledoc """
+  Resolves the Amp CLI executable through the shared core provider policy.
+  """
 
-  import Bitwise
-
-  alias AmpSdk.{Defaults, Error}
-
-  defmodule CommandSpec do
-    @moduledoc "Executable command configuration for invoking the Amp CLI."
-
-    @enforce_keys [:program]
-    defstruct program: "", argv_prefix: []
-
-    @type t :: %__MODULE__{
-            program: String.t(),
-            argv_prefix: [String.t()]
-          }
-  end
+  alias AmpSdk.Error
+  alias CliSubprocessCore.{CommandSpec, ProviderCLI}
 
   @type resolution_result :: {:ok, CommandSpec.t()} | {:error, Error.t()}
 
   @spec resolve() :: resolution_result()
   def resolve do
-    with :error <- check_env_var(),
-         :error <- check_binary_paths(),
-         :error <- check_path() do
-      {:error,
-       Error.new(
-         :cli_not_found,
-         Defaults.cli_not_found_message(),
-         exit_code: 127
-       )}
+    case ProviderCLI.resolve(:amp) do
+      {:ok, %CommandSpec{} = spec} ->
+        {:ok, spec}
+
+      {:error, %ProviderCLI.Error{} = error} ->
+        {:error, provider_cli_error(error)}
     end
   end
 
   @spec resolve!() :: CommandSpec.t()
   def resolve!() do
     case resolve() do
-      {:ok, spec} -> spec
-      {:error, error} -> raise error
+      {:ok, %CommandSpec{} = spec} ->
+        spec
+
+      {:error, %Error{} = error} ->
+        raise error
     end
   end
 
   @spec command_args(CommandSpec.t(), [String.t()]) :: [String.t()]
-  def command_args(%CommandSpec{argv_prefix: prefix}, args) when is_list(args) do
-    prefix ++ args
-  end
+  defdelegate command_args(command_spec, args), to: CommandSpec
 
-  defp check_env_var do
-    with path when is_binary(path) <- System.get_env("AMP_CLI_PATH") do
-      resolve_cli_path(path, System.find_executable("node"))
-    else
-      _ -> :error
-    end
-  end
-
-  defp resolve_cli_path(path, node_path) do
-    cond do
-      not File.regular?(path) ->
-        :error
-
-      String.ends_with?(path, ".js") and is_binary(node_path) ->
-        {:ok, %CommandSpec{program: node_path, argv_prefix: [path]}}
-
-      String.ends_with?(path, ".js") ->
-        :error
-
-      executable?(path) ->
-        {:ok, %CommandSpec{program: path, argv_prefix: []}}
-
-      true ->
-        :error
-    end
-  end
-
-  defp check_binary_paths do
-    home = System.get_env("HOME") || System.user_home!()
-
-    [
-      Path.join([home, ".amp", "bin", "amp"]),
-      Path.join([home, ".local", "bin", "amp"])
-    ]
-    |> Enum.find_value(:error, fn path ->
-      resolve_cli_path(path, System.find_executable("node"))
-    end)
-  end
-
-  defp check_path do
-    case System.find_executable("amp") do
-      nil -> :error
-      path -> {:ok, %CommandSpec{program: path, argv_prefix: []}}
-    end
-  end
-
-  defp executable?(path) do
-    case File.stat(path) do
-      {:ok, %File.Stat{type: :regular, mode: mode}} ->
-        (mode &&& 0o111) != 0
-
-      _ ->
-        false
-    end
+  defp provider_cli_error(%ProviderCLI.Error{} = error) do
+    Error.new(:cli_not_found, error.message,
+      cause: error,
+      context: %{provider: error.provider},
+      exit_code: 127
+    )
   end
 end
