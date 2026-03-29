@@ -14,6 +14,7 @@ Runnable examples demonstrating every public function of the Amp SDK for Elixir.
 ```bash
 ./examples/run_all.sh
 ./examples/run_all.sh --ssh-host example.internal
+./examples/run_all.sh --ssh-host example.internal --danger-full-access
 ```
 
 Or run individually:
@@ -21,12 +22,15 @@ Or run individually:
 ```bash
 mix run examples/<name>.exs
 mix run examples/run_simple.exs -- --ssh-host example.internal
+mix run examples/run_simple.exs -- --ssh-host example.internal --danger-full-access
 ```
 
 ## Shared SSH Flags
 
 Every example in this directory accepts the same optional SSH transport flags:
 
+- `--cwd <path>` passes an explicit working directory to the example
+- `--danger-full-access` maps the example to `dangerously_allow_all: true`
 - `--ssh-host <host>` switches the example to `execution_surface: :ssh_exec`
 - `--ssh-user <user>` overrides the SSH user
 - `--ssh-port <port>` overrides the SSH port
@@ -34,6 +38,9 @@ Every example in this directory accepts the same optional SSH transport flags:
 
 If you omit the SSH flags, the examples keep the existing local subprocess
 default unchanged.
+
+For Amp, `--danger-full-access` keeps the same transport placement and opts the
+example into the permissive runtime flag that the Amp CLI already exposes.
 
 ## Execute
 
@@ -91,4 +98,4 @@ default unchanged.
 4. Use `%Options{dangerously_allow_all: true}` for non-interactive execution
 5. Require `examples/support/example_helper.exs`, call `Support.init!()`, and
    apply `Support.with_execution_surface/1` or `Support.command_opts/1` so the
-   shared SSH flags work consistently
+   shared SSH and `--danger-full-access` flags work consistently

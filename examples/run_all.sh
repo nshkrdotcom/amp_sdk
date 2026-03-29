@@ -17,6 +17,7 @@ FAIL=0
 SKIP=0
 FORWARD_ARGS=()
 SSH_HOST=""
+SSH_AUX_SET=0
 
 cleanup() {
   echo ""
@@ -29,11 +30,12 @@ trap cleanup INT TERM
 usage() {
   cat <<'EOF'
 Usage:
-  ./examples/run_all.sh [--ssh-host HOST] [--ssh-user USER] [--ssh-port PORT] [--ssh-identity-file PATH]
+  ./examples/run_all.sh [--cwd PATH] [--danger-full-access] [--ssh-host HOST] [--ssh-user USER] [--ssh-port PORT] [--ssh-identity-file PATH]
 
 Examples:
   ./examples/run_all.sh
   ./examples/run_all.sh --ssh-host example.internal
+  ./examples/run_all.sh --ssh-host example.internal --danger-full-access
   ./examples/run_all.sh --ssh-host builder@example.internal --ssh-port 2222
 EOF
 }
@@ -84,30 +86,32 @@ while [[ $# -gt 0 ]]; do
       usage
       exit 0
       ;;
-    --ssh-host)
-      if [[ $# -lt 2 ]]; then
-        echo "Error: --ssh-host requires a value." >&2
-        exit 1
-      fi
-
-      SSH_HOST="$2"
-      FORWARD_ARGS+=("$1" "$2")
-      shift 2
-      ;;
-    --ssh-user|--ssh-port|--ssh-identity-file)
+    --cwd|--ssh-host|--ssh-user|--ssh-port|--ssh-identity-file)
       if [[ $# -lt 2 ]]; then
         echo "Error: $1 requires a value." >&2
         exit 1
       fi
 
+      if [[ "$1" == "--ssh-host" ]]; then
+        SSH_HOST="$2"
+      elif [[ "$1" == --ssh-* ]]; then
+        SSH_AUX_SET=1
+      fi
+
       FORWARD_ARGS+=("$1" "$2")
       shift 2
       ;;
-    --ssh-host=*|--ssh-user=*|--ssh-port=*|--ssh-identity-file=*)
+    --cwd=*|--ssh-host=*|--ssh-user=*|--ssh-port=*|--ssh-identity-file=*)
       if [[ "$1" == --ssh-host=* ]]; then
         SSH_HOST="${1#*=}"
+      elif [[ "$1" == --ssh-* ]]; then
+        SSH_AUX_SET=1
       fi
 
+      FORWARD_ARGS+=("$1")
+      shift
+      ;;
+    --danger-full-access)
       FORWARD_ARGS+=("$1")
       shift
       ;;
@@ -119,6 +123,11 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -z "$SSH_HOST" && "$SSH_AUX_SET" -eq 1 ]]; then
+  echo "Error: --ssh-user/--ssh-port/--ssh-identity-file require --ssh-host." >&2
+  exit 1
+fi
 
 # Pre-flight
 header "AmpSdk Examples Runner"
@@ -140,6 +149,10 @@ else
 
   AMP_VER="$(amp --version 2>/dev/null | head -1)"
   echo -e "  amp CLI:  ${GREEN}${AMP_VER}${NC}"
+fi
+
+if [[ " ${FORWARD_ARGS[*]} " == *" --danger-full-access "* ]]; then
+  echo -e "  Runtime:  ${GREEN}dangerously_allow_all${NC}"
 fi
 
 header "Compiling"
