@@ -11,6 +11,7 @@ defmodule AmpSdk.Runtime.CLI do
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.Event, as: CoreEvent
+  alias CliSubprocessCore.ExecutionSurface
   alias CliSubprocessCore.Payload
   alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
   alias CliSubprocessCore.ProviderProfiles.Amp, as: CoreAmp
@@ -424,7 +425,7 @@ defmodule AmpSdk.Runtime.CLI do
            CliSubprocessCore.Command.new(
              command_spec.program,
              CLI.command_args(command_spec, args),
-             cwd: Keyword.get(opts, :cwd, File.cwd!()),
+             cwd: default_cwd(Keyword.get(opts, :cwd), Keyword.get(opts, :execution_surface)),
              env: Keyword.get(opts, :env, %{})
            )}
         end
@@ -519,7 +520,7 @@ defmodule AmpSdk.Runtime.CLI do
       labels: options.labels,
       thinking: options.thinking,
       settings_path: settings_path,
-      cwd: options.cwd || File.cwd!(),
+      cwd: default_cwd(options.cwd, options.execution_surface),
       env: build_env(options),
       headless_timeout_ms: :infinity,
       max_stderr_buffer_size: options.max_stderr_buffer_bytes,
@@ -532,6 +533,12 @@ defmodule AmpSdk.Runtime.CLI do
     ]
     |> maybe_put_prompt(input_mode, input)
     |> Keyword.merge(Options.execution_surface_opts(options))
+  end
+
+  defp default_cwd(cwd, _execution_surface) when is_binary(cwd) and cwd != "", do: cwd
+
+  defp default_cwd(_cwd, execution_surface) do
+    if ExecutionSurface.remote_surface?(execution_surface), do: nil, else: File.cwd!()
   end
 
   defp build_invocation_args(%Options{} = options, input_mode, opts) do
@@ -743,17 +750,20 @@ defmodule AmpSdk.Runtime.CLI do
          session_id,
          _state
        ) do
+    kind = normalize_error_kind(payload.code) || :transport_exit
+
     error_result!(%{
       "type" => "result",
       "subtype" => "error_during_execution",
       "session_id" => session_id,
       "is_error" => true,
       "error" => payload.message || exit_message(exit),
-      "kind" => :transport_exit,
-      "details" => %{
-        "reason" => inspect(exit.reason),
-        "exit_code" => exit.code
-      },
+      "kind" => kind,
+      "details" =>
+        payload.metadata
+        |> stringify_keys()
+        |> Map.put_new("reason", inspect(exit.reason))
+        |> Map.put_new("exit_code", exit.code),
       "exit_code" => exit.code
     })
   end
@@ -816,12 +826,19 @@ defmodule AmpSdk.Runtime.CLI do
     |> Map.merge(normalize_raw_map(raw))
   end
 
-  defp normalize_error_kind(nil), do: :unknown
+  defp normalize_error_kind(nil), do: nil
+  defp normalize_error_kind(:unknown), do: nil
 
   defp normalize_error_kind(code) when is_binary(code) do
     case code do
+      "unknown" ->
+        nil
+
       "transport_error" ->
         :transport_error
+
+      "transport_exit" ->
+        :transport_exit
 
       "parse_error" ->
         :parse_error
@@ -835,7 +852,7 @@ defmodule AmpSdk.Runtime.CLI do
   end
 
   defp normalize_error_kind(code) when is_atom(code), do: code
-  defp normalize_error_kind(_code), do: :unknown
+  defp normalize_error_kind(_code), do: nil
 
   defp exit_message(%CoreProcessExit{status: :success, code: code}),
     do: "CLI exited with code #{code || 0}"

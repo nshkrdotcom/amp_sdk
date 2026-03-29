@@ -307,4 +307,30 @@ defmodule AmpSdk.CommandTest do
       File.rm_rf(dir)
     end
   end
+
+  test "run/2 classifies missing remote Amp CLI as :cli_not_found" do
+    fake_ssh = FakeSSH.new!()
+
+    try do
+      TestSupport.with_env(%{"PATH" => "/nonexistent_dir_only", "AMP_CLI_PATH" => nil}, fn ->
+        assert {:error, %Error{} = error} =
+                 Command.run(["threads", "list"],
+                   execution_surface: %ExecutionSurface{
+                     surface_kind: :static_ssh,
+                     transport_options:
+                       FakeSSH.transport_options(fake_ssh,
+                         destination: "amp.command.missing.example"
+                       )
+                   },
+                   env: %{"PATH" => "/nonexistent_dir_only"}
+                 )
+
+        assert error.kind == :cli_not_found
+        assert error.exit_code == 127
+        assert error.message =~ "remote target amp.command.missing.example"
+      end)
+    after
+      FakeSSH.cleanup(fake_ssh)
+    end
+  end
 end

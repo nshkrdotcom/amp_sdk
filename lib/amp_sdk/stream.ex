@@ -246,13 +246,12 @@ defmodule AmpSdk.Stream do
     }
   end
 
-  defp maybe_attach_stderr(%Types.ErrorResultMessage{kind: kind} = event, %State{} = state)
-       when kind in [:parse_error, :stream_start_failed, :stream_timeout, :transport_error] do
+  defp maybe_attach_stderr(%Types.ErrorResultMessage{} = event, %State{} = state) do
     stderr = normalize_stderr(state.stderr)
 
     %Types.ErrorResultMessage{
       event
-      | stderr: stderr,
+      | stderr: if(event.stderr in [nil, ""], do: stderr, else: event.stderr),
         stderr_truncated?: state.stderr_truncated?
     }
   end

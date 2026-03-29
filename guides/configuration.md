@@ -76,7 +76,8 @@ during `Options.validate!/1`.
 
 On remote SSH surfaces, local `AMP_CLI_PATH` overrides are intentionally
 ignored. The remote host is expected to expose `amp` on its own `PATH`, or to
-provide an explicit remote command via the broader core transport layer.
+receive a remote `PATH` override through `Options.env`. Missing remote binaries
+surface as structured `:cli_not_found` errors with the remote stderr attached.
 ```
 
 ## Agent Modes

@@ -243,6 +243,30 @@ defmodule AmpSdk.StreamExecuteTest do
     end
   end
 
+  test "execute/2 surfaces missing remote Amp CLIs as :cli_not_found" do
+    fake_ssh = FakeSSH.new!()
+
+    try do
+      messages =
+        AmpSdk.execute("boom", %Options{
+          execution_surface: %ExecutionSurface{
+            surface_kind: :static_ssh,
+            transport_options:
+              FakeSSH.transport_options(fake_ssh, destination: "amp.stream.missing.example")
+          },
+          env: %{"PATH" => "/nonexistent_dir_only"}
+        })
+        |> Enum.to_list()
+
+      assert [%ErrorResultMessage{} = error] = messages
+      assert error.kind == :cli_not_found
+      assert error.exit_code == 127
+      assert error.error =~ "remote target amp.stream.missing.example"
+    after
+      FakeSSH.cleanup(fake_ssh)
+    end
+  end
+
   test "execute/2 caps stderr tail and flags truncation metadata" do
     dir = TestSupport.tmp_dir!("amp_stream_large_stderr_exit")
     amp_path = write_large_stderr_exit_stub!(dir)

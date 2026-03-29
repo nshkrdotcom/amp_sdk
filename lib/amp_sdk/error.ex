@@ -11,14 +11,17 @@ defmodule AmpSdk.Error do
 
   @type kind ::
           :cli_not_found
+          | :auth_error
           | :command_failed
           | :command_timeout
           | :command_execution_failed
           | :stream_start_failed
           | :transport_error
+          | :transport_exit
           | :parse_error
           | :invalid_message
           | :invalid_configuration
+          | :config_invalid
           | :execution_failed
           | :no_result
           | :task_timeout
@@ -42,6 +45,7 @@ defmodule AmpSdk.Error do
           | {:context, map() | keyword() | nil}
           | {:exit_code, integer() | nil}
 
+  alias CliSubprocessCore.ProviderCLI.ErrorRuntimeFailure
   alias CliSubprocessCore.Transport.Error, as: CoreTransportError
 
   @spec new(kind(), String.t(), [normalize_opt()]) :: t()
@@ -56,6 +60,23 @@ defmodule AmpSdk.Error do
     }
   end
 
+  @spec from_runtime_failure(ErrorRuntimeFailure.t(), [normalize_opt()]) :: t()
+  def from_runtime_failure(%ErrorRuntimeFailure{} = failure, opts \\ []) when is_list(opts) do
+    extra_context =
+      opts
+      |> Keyword.get(:context)
+      |> normalize_context()
+
+    new(
+      runtime_failure_kind(failure),
+      Keyword.get(opts, :message, failure.message),
+      cause: Keyword.get(opts, :cause, failure.cause || failure),
+      details: Keyword.get(opts, :details, failure.stderr),
+      context: Map.merge(failure.context || %{}, extra_context),
+      exit_code: Keyword.get(opts, :exit_code, failure.exit_code)
+    )
+  end
+
   @spec normalize(term(), [normalize_opt()]) :: t()
   def normalize(reason, opts \\ [])
 
@@ -67,6 +88,10 @@ defmodule AmpSdk.Error do
     |> maybe_put(:details, Keyword.get(opts, :details))
     |> maybe_put(:context, normalize_context(Keyword.get(opts, :context, error.context)))
     |> maybe_put(:exit_code, normalize_exit_code(Keyword.get(opts, :exit_code)))
+  end
+
+  def normalize(%ErrorRuntimeFailure{} = failure, opts) do
+    from_runtime_failure(failure, opts)
   end
 
   def normalize(reason, opts) when is_exception(reason) do
@@ -166,6 +191,12 @@ defmodule AmpSdk.Error do
 
   defp normalize_exit_code(code) when is_integer(code), do: code
   defp normalize_exit_code(_), do: nil
+
+  defp runtime_failure_kind(%ErrorRuntimeFailure{kind: :auth_error}), do: :auth_error
+  defp runtime_failure_kind(%ErrorRuntimeFailure{kind: :cli_not_found}), do: :cli_not_found
+  defp runtime_failure_kind(%ErrorRuntimeFailure{kind: :cwd_not_found}), do: :config_invalid
+  defp runtime_failure_kind(%ErrorRuntimeFailure{kind: :process_exit}), do: :transport_exit
+  defp runtime_failure_kind(%ErrorRuntimeFailure{kind: :transport_error}), do: :transport_error
 
   defp transport_reason_message(:not_connected), do: "Transport not connected"
   defp transport_reason_message(%CoreTransportError{} = error), do: error.message

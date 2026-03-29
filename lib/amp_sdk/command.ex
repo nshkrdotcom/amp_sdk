@@ -10,6 +10,7 @@ defmodule AmpSdk.Command do
   alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.ExecutionSurface
   alias CliSubprocessCore.ProcessExit
+  alias CliSubprocessCore.ProviderCLI
   alias CliSubprocessCore.Transport.Error, as: CoreTransportError
   alias CliSubprocessCore.Transport.RunResult
 
@@ -47,10 +48,17 @@ defmodule AmpSdk.Command do
     with {:ok, core_run_opts} <- build_core_run_opts(opts, timeout, stderr_to_stdout) do
       case CoreCommand.run(invocation, core_run_opts) do
         {:ok, %RunResult{} = result} ->
-          handle_run_result(result, trim_output, stderr_to_stdout, command.program, command_args)
+          handle_run_result(
+            result,
+            trim_output,
+            stderr_to_stdout,
+            command,
+            command_args,
+            opts
+          )
 
         {:error, %CoreCommandError{} = error} ->
-          {:error, translate_command_error(error, timeout, command.program, command_args)}
+          {:error, translate_command_error(error, timeout, command, command_args, opts)}
       end
     end
   end
@@ -59,8 +67,9 @@ defmodule AmpSdk.Command do
          %RunResult{exit: %ProcessExit{status: :success}} = result,
          trim_output,
          stderr_to_stdout,
-         _program,
-         _args
+         _command,
+         _args,
+         _opts
        ) do
     {:ok, result |> command_output(stderr_to_stdout) |> maybe_trim(trim_output)}
   end
@@ -69,42 +78,77 @@ defmodule AmpSdk.Command do
          %RunResult{exit: %ProcessExit{} = exit} = result,
          _trim_output,
          stderr_to_stdout,
-         program,
-         args
+         command,
+         args,
+         opts
        ) do
-    code = exit.code || 1
     output = command_output(result, stderr_to_stdout)
 
-    {:error,
-     Error.new(:command_failed, "Exit code #{code}: #{String.trim(output)}",
-       exit_code: code,
-       details: output,
-       context: %{program: program, args: args}
-     )}
+    failure =
+      ProviderCLI.runtime_failure(
+        :amp,
+        exit,
+        execution_surface: Keyword.get(opts, :execution_surface),
+        cwd: Keyword.get(opts, :cd),
+        stderr: output,
+        command: command.program
+      )
+
+    error =
+      case failure.kind do
+        :process_exit ->
+          Error.new(:command_failed, failure.message,
+            exit_code: exit.code,
+            details: output,
+            context: %{program: command.program, args: args}
+          )
+
+        _other ->
+          Error.from_runtime_failure(failure,
+            context: %{program: command.program, args: args}
+          )
+      end
+
+    {:error, error}
   end
 
   defp translate_command_error(
          %CoreCommandError{reason: {:transport, %CoreTransportError{reason: :timeout}}},
          timeout,
-         program,
-         args
+         command,
+         args,
+         _opts
        ) do
     Error.new(:command_timeout, "Command timed out after #{timeout}ms",
       exit_code: 124,
-      context: %{program: program, args: args}
+      context: %{program: command.program, args: args}
     )
   end
 
-  defp translate_command_error(%CoreCommandError{} = error, _timeout, program, args) do
+  defp translate_command_error(%CoreCommandError{} = error, _timeout, command, args, opts) do
     reason = unwrap_command_error_reason(error)
 
-    Error.new(
-      :command_execution_failed,
-      "Failed to execute command: #{format_reason(reason)}",
-      exit_code: 127,
-      cause: reason,
-      context: Map.merge(%{program: program, args: args}, error.context)
-    )
+    if provider_runtime_reason?(reason) do
+      failure =
+        ProviderCLI.runtime_failure(
+          :amp,
+          reason,
+          execution_surface: Keyword.get(opts, :execution_surface),
+          cwd: Keyword.get(opts, :cd),
+          command: command.program
+        )
+
+      Error.from_runtime_failure(failure,
+        context: Map.merge(%{program: command.program, args: args}, error.context)
+      )
+    else
+      Error.new(
+        :command_execution_failed,
+        "Failed to execute command: #{inspect(reason)}",
+        cause: reason,
+        context: Map.merge(%{program: command.program, args: args}, error.context)
+      )
+    end
   end
 
   defp stderr_mode(true), do: :stdout
@@ -136,6 +180,11 @@ defmodule AmpSdk.Command do
 
   defp unwrap_command_error_reason(%CoreCommandError{reason: reason}), do: reason
 
+  defp provider_runtime_reason?(%CoreTransportError{}), do: true
+  defp provider_runtime_reason?({:transport, %CoreTransportError{}}), do: true
+  defp provider_runtime_reason?(%ProcessExit{}), do: true
+  defp provider_runtime_reason?(_reason), do: false
+
   defp maybe_trim(output, true), do: String.trim(output)
   defp maybe_trim(output, _), do: output
 
@@ -156,9 +205,4 @@ defmodule AmpSdk.Command do
          )}
     end
   end
-
-  defp format_reason(%_{} = exception) when is_exception(exception),
-    do: Exception.message(exception)
-
-  defp format_reason(reason), do: inspect(reason)
 end

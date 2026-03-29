@@ -145,6 +145,40 @@ defmodule AmpSdk.Runtime.CLITest do
         File.rm_rf(dir)
       end
     end
+
+    test "does not leak the local cwd into remote session invocations" do
+      dir = TestSupport.tmp_dir!("amp_runtime_cli_remote_cwd")
+      _stub_path = write_runtime_stub!(dir)
+      fake_ssh = FakeSSH.new!()
+      session_ref = make_ref()
+
+      options = %Options{
+        execution_surface: %ExecutionSurface{
+          surface_kind: :static_ssh,
+          transport_options:
+            FakeSSH.transport_options(fake_ssh, destination: "amp-runtime.cwd.example")
+        },
+        env: %{"PATH" => dir <> ":" <> (System.get_env("PATH") || "")}
+      }
+
+      try do
+        assert {:ok, session, %{info: info}} =
+                 CLI.start_session(
+                   input: "hello over ssh",
+                   options: options,
+                   subscriber: {self(), session_ref}
+                 )
+
+        assert info.invocation.cwd == nil
+
+        session_monitor_ref = Process.monitor(session)
+        assert :ok = CLI.close(session)
+        assert_receive {:DOWN, ^session_monitor_ref, :process, ^session, :normal}, 2_000
+      after
+        FakeSSH.cleanup(fake_ssh)
+        File.rm_rf(dir)
+      end
+    end
   end
 
   describe "Profile.transport_options/1" do
@@ -286,7 +320,7 @@ defmodule AmpSdk.Runtime.CLITest do
           payload:
             Payload.Error.new(
               message: "CLI exited with code 7",
-              code: "transport_error",
+              code: "transport_exit",
               metadata: %{exit: %{code: 7}}
             )
         )

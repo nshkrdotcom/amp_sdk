@@ -1,6 +1,7 @@
 defmodule AmpSdk.LiveSSHTest do
   use ExUnit.Case, async: false
 
+  alias AmpSdk.Error
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.TestSupport.LiveSSH
 
@@ -13,28 +14,22 @@ defmodule AmpSdk.LiveSSHTest do
     @moduletag skip: LiveSSH.skip_reason()
   end
 
-  setup_all do
-    {:ok,
-     skip: not LiveSSH.runnable?("amp"),
-     skip_reason:
-       "Remote SSH target #{inspect(LiveSSH.destination())} does not have a runnable `amp --version`."}
-  end
+  test "live SSH: AmpSdk.run/2 returns a remote success or a structured runtime failure" do
+    case AmpSdk.run("Reply with exactly: AMP_LIVE_SSH_OK", %Options{
+           execution_surface: LiveSSH.execution_surface(),
+           dangerously_allow_all: true,
+           stream_timeout_ms: 120_000
+         }) do
+      {:ok, result} ->
+        assert result =~ "AMP_LIVE_SSH_OK"
 
-  test "live SSH: AmpSdk.run/2 executes against the remote Amp CLI", %{
-    skip: skip?,
-    skip_reason: skip_reason
-  } do
-    if skip? do
-      assert is_binary(skip_reason)
-    else
-      assert {:ok, result} =
-               AmpSdk.run("Reply with exactly: AMP_LIVE_SSH_OK", %Options{
-                 execution_surface: LiveSSH.execution_surface(),
-                 dangerously_allow_all: true,
-                 stream_timeout_ms: 120_000
-               })
+      {:error, %Error{kind: :cli_not_found} = error} ->
+        assert error.message =~ "Amp CLI not found"
+        assert error.message =~ "remote"
+        assert error.details =~ "No such file or directory"
 
-      assert result =~ "AMP_LIVE_SSH_OK"
+      {:error, %Error{kind: :auth_error} = error} ->
+        assert error.message =~ "authentication"
     end
   end
 end

@@ -23,7 +23,7 @@ defmodule AmpSdk do
     |> execute(options)
     |> Enum.reduce(nil, fn
       %ResultMessage{result: result}, _acc -> {:ok, result}
-      %ErrorResultMessage{error: error}, _acc -> {:error, Error.new(:execution_failed, error)}
+      %ErrorResultMessage{} = error, _acc -> {:error, error_from_result_message(error)}
       _msg, acc -> acc
     end)
     |> case do
@@ -31,6 +31,39 @@ defmodule AmpSdk do
       result -> result
     end
   end
+
+  defp error_from_result_message(%ErrorResultMessage{} = message) do
+    Error.new(
+      normalize_error_kind(message.kind, message.error),
+      message.error,
+      details: message.stderr,
+      context:
+        %{}
+        |> maybe_put(:details, message.details)
+        |> maybe_put(:stderr_truncated?, message.stderr_truncated?),
+      exit_code: message.exit_code
+    )
+  end
+
+  defp normalize_error_kind(kind, _message) when is_atom(kind) and kind not in [nil, :unknown],
+    do: kind
+
+  defp normalize_error_kind(kind, _message)
+       when is_binary(kind) and kind not in ["", "unknown"] do
+    kind
+    |> String.downcase()
+    |> String.replace("-", "_")
+    |> String.to_atom()
+  end
+
+  defp normalize_error_kind(_kind, message) when is_binary(message) do
+    if String.match?(message, ~r/auth|log in|login/i), do: :auth_error, else: :execution_failed
+  end
+
+  defp normalize_error_kind(_kind, _message), do: :execution_failed
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   # === Helpers ===
 

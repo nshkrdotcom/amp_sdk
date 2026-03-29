@@ -53,7 +53,7 @@ defmodule AmpSdk.ErrorShapeTest do
           assert {:error, %Error{} = error} = Command.run(["threads", "list"])
           assert error.kind == :command_failed
           assert error.exit_code == 7
-          assert error.message =~ "Exit code 7"
+          assert error.message =~ "code 7"
         end
       )
     after
@@ -61,7 +61,7 @@ defmodule AmpSdk.ErrorShapeTest do
     end
   end
 
-  test "AmpSdk.run returns AmpSdk.Error when stream emits error result" do
+  test "AmpSdk.run preserves structured error kinds from stream results" do
     dir = TestSupport.tmp_dir!("amp_error_shape_run")
     amp_path = write_stream_stub!(dir)
 
@@ -71,6 +71,7 @@ defmodule AmpSdk.ErrorShapeTest do
         subtype: "error_during_execution",
         is_error: true,
         error: "something failed",
+        kind: "cli_not_found",
         duration_ms: 1,
         num_turns: 1
       })
@@ -80,7 +81,7 @@ defmodule AmpSdk.ErrorShapeTest do
         assert {:error, %Error{} = error} =
                  AmpSdk.run("prompt", %Options{env: %{"AMP_TEST_OUTPUT_JSON" => error_json}})
 
-        assert error.kind == :execution_failed
+        assert error.kind == :cli_not_found
         assert error.message == "something failed"
       end)
     after

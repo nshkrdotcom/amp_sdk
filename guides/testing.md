@@ -100,9 +100,13 @@ Run live SSH smoke tests with the shared core harness:
 
 ```bash
 CLI_SUBPROCESS_CORE_LIVE_SSH=1 \
-CLI_SUBPROCESS_CORE_LIVE_SSH_DESTINATION=luhome \
+CLI_SUBPROCESS_CORE_LIVE_SSH_DESTINATION=<ssh-host> \
 mix test --only live_ssh --include live_ssh
 ```
+
+Those tests no longer skip when the remote `amp` binary is absent. They assert
+either a successful remote run or a structured `:cli_not_found` / `:auth_error`
+result so error-shape regressions stay covered.
 
 ## Testing Argument Building
 
