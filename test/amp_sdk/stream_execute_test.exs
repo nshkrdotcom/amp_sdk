@@ -191,7 +191,7 @@ defmodule AmpSdk.StreamExecuteTest do
 
     try do
       execution_surface = %ExecutionSurface{
-        surface_kind: :static_ssh,
+        surface_kind: :ssh_exec,
         transport_options: FakeSSH.transport_options(fake_ssh, destination: "amp.stream.example"),
         target_id: "amp-stream-target"
       }
@@ -250,7 +250,7 @@ defmodule AmpSdk.StreamExecuteTest do
       messages =
         AmpSdk.execute("boom", %Options{
           execution_surface: %ExecutionSurface{
-            surface_kind: :static_ssh,
+            surface_kind: :ssh_exec,
             transport_options:
               FakeSSH.transport_options(fake_ssh, destination: "amp.stream.missing.example")
           },

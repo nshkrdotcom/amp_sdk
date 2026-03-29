@@ -107,7 +107,7 @@ defmodule AmpSdk.Runtime.CLITest do
 
       options = %Options{
         execution_surface: %ExecutionSurface{
-          surface_kind: :static_ssh,
+          surface_kind: :ssh_exec,
           transport_options:
             FakeSSH.transport_options(fake_ssh,
               destination: "runtime.ssh.example",
@@ -128,7 +128,7 @@ defmodule AmpSdk.Runtime.CLITest do
                    subscriber: {self(), session_ref}
                  )
 
-        assert info.transport.info.surface_kind == :static_ssh
+        assert info.transport.info.surface_kind == :ssh_exec
         assert info.transport.info.target_id == "amp-runtime-target"
         assert info.transport.info.adapter_metadata.destination == "runtime.ssh.example"
         assert info.transport.info.adapter_metadata.ssh_path == fake_ssh.ssh_path
@@ -154,7 +154,7 @@ defmodule AmpSdk.Runtime.CLITest do
 
       options = %Options{
         execution_surface: %ExecutionSurface{
-          surface_kind: :static_ssh,
+          surface_kind: :ssh_exec,
           transport_options:
             FakeSSH.transport_options(fake_ssh, destination: "amp-runtime.cwd.example")
         },

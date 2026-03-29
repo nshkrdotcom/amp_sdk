@@ -77,7 +77,7 @@ defmodule AmpSdk.CLITest do
       TestSupport.with_env(%{"AMP_CLI_PATH" => "/nonexistent/local/amp"}, fn ->
         assert {:ok, %CommandSpec{program: "amp", argv_prefix: []}} =
                  CLI.resolve(
-                   surface_kind: :static_ssh,
+                   surface_kind: :ssh_exec,
                    transport_options: [destination: "amp.remote.example"]
                  )
       end)

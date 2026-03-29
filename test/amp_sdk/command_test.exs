@@ -282,7 +282,7 @@ defmodule AmpSdk.CommandTest do
 
     try do
       execution_surface = %ExecutionSurface{
-        surface_kind: :static_ssh,
+        surface_kind: :ssh_exec,
         transport_options: FakeSSH.transport_options(fake_ssh, destination: "amp.command.example")
       }
 
@@ -316,7 +316,7 @@ defmodule AmpSdk.CommandTest do
         assert {:error, %Error{} = error} =
                  Command.run(["threads", "list"],
                    execution_surface: %ExecutionSurface{
-                     surface_kind: :static_ssh,
+                     surface_kind: :ssh_exec,
                      transport_options:
                        FakeSSH.transport_options(fake_ssh,
                          destination: "amp.command.missing.example"

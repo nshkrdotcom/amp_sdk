@@ -37,7 +37,7 @@ defmodule AmpSdk.OptionsTest do
       validated =
         Options.validate!(%Options{
           execution_surface: %ExecutionSurface{
-            surface_kind: :static_ssh,
+            surface_kind: :ssh_exec,
             transport_options: [destination: "amp.example", ssh_options: [BatchMode: "yes"]],
             target_id: "amp-target-1",
             observability: %{lane: :amp}
@@ -45,7 +45,7 @@ defmodule AmpSdk.OptionsTest do
         })
 
       assert %ExecutionSurface{} = validated.execution_surface
-      assert validated.execution_surface.surface_kind == :static_ssh
+      assert validated.execution_surface.surface_kind == :ssh_exec
       assert validated.execution_surface.transport_options[:destination] == "amp.example"
       assert validated.execution_surface.target_id == "amp-target-1"
       assert validated.execution_surface.observability == %{lane: :amp}
@@ -55,7 +55,7 @@ defmodule AmpSdk.OptionsTest do
       from_map =
         Options.validate!(%Options{
           execution_surface: %{
-            "surface_kind" => :static_ssh,
+            "surface_kind" => :ssh_exec,
             "transport_options" => [destination: "amp-map.example"],
             "target_id" => "amp-map-target"
           }
@@ -64,7 +64,7 @@ defmodule AmpSdk.OptionsTest do
       from_keyword =
         Options.validate!(%Options{
           execution_surface: [
-            surface_kind: :static_ssh,
+            surface_kind: :ssh_exec,
             transport_options: [destination: "amp-keyword.example"],
             target_id: "amp-keyword-target"
           ]
@@ -92,7 +92,7 @@ defmodule AmpSdk.OptionsTest do
       surface =
         Options.validate!(%Options{
           execution_surface: [
-            surface_kind: :static_ssh,
+            surface_kind: :ssh_exec,
             transport_options: [destination: "amp-opts.example"],
             target_id: "amp-opts-target"
           ]

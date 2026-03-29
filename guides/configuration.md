@@ -65,7 +65,7 @@ alias AmpSdk.Types.Options
 alias CliSubprocessCore.ExecutionSurface
 
 surface = %ExecutionSurface{
-  surface_kind: :static_ssh,
+  surface_kind: :ssh_exec,
   transport_options: [destination: "build-host.example"]
 }
 
