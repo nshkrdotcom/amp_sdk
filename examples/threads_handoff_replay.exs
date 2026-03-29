@@ -1,7 +1,12 @@
 # Thread handoff and replay
 # Run with: mix run examples/threads_handoff_replay.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
 alias AmpSdk.Types.Options
+alias Examples.Support
+
+Support.init!()
 
 IO.puts("=== Thread Handoff & Replay ===\n")
 
@@ -9,10 +14,14 @@ IO.puts("=== Thread Handoff & Replay ===\n")
 IO.puts("Creating thread with content...")
 
 thread_id =
-  AmpSdk.execute("Reply with only: hello", %Options{
-    dangerously_allow_all: true,
-    visibility: "private"
-  })
+  AmpSdk.execute(
+    "Reply with only: hello",
+    %Options{
+      dangerously_allow_all: true,
+      visibility: "private"
+    }
+    |> Support.with_execution_surface()
+  )
   # Consume the full stream before using the thread so it is fully persisted.
   |> Enum.reduce(nil, fn message, acc ->
     case AmpSdk.Types.session_id(message) do
@@ -34,9 +43,12 @@ failed = false
 IO.puts("\nHandoff:")
 
 failed =
-  case AmpSdk.threads_handoff(thread_id,
-         goal: "Continue this thread and summarize the current state in one sentence.",
-         print: true
+  case AmpSdk.threads_handoff(
+         thread_id,
+         Support.command_opts(
+           goal: "Continue this thread and summarize the current state in one sentence.",
+           print: true
+         )
        ) do
     {:ok, output} ->
       IO.puts("  #{String.trim(output)}")
@@ -52,7 +64,10 @@ IO.puts("\nReplay:")
 
 failed =
   if System.get_env("AMP_RUN_REPLAY", "0") == "1" do
-    case AmpSdk.threads_replay(thread_id, no_typing: true, no_indicator: true, exit_delay: 0) do
+    case AmpSdk.threads_replay(
+           thread_id,
+           Support.command_opts(no_typing: true, no_indicator: true, exit_delay: 0)
+         ) do
       {:ok, output} ->
         IO.puts("  #{String.trim(output)}")
         failed
@@ -67,6 +82,6 @@ failed =
   end
 
 # Cleanup
-AmpSdk.threads_delete(thread_id)
+Support.invoke(["threads", "delete", thread_id])
 
 if failed, do: System.halt(1), else: System.halt(0)

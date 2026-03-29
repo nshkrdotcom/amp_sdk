@@ -2,7 +2,12 @@
 #
 # Run with: mix run examples/with_permissions.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
 alias AmpSdk.Types.Options
+alias Examples.Support
+
+Support.init!()
 
 IO.puts("=== AmpSdk With Permissions ===\n")
 
@@ -13,11 +18,13 @@ permissions = [
   AmpSdk.create_permission("create_file", "reject")
 ]
 
-options = %Options{
-  permissions: permissions,
-  dangerously_allow_all: true,
-  mode: "smart"
-}
+options =
+  %Options{
+    permissions: permissions,
+    dangerously_allow_all: true,
+    mode: "smart"
+  }
+  |> Support.with_execution_surface()
 
 case AmpSdk.run(
        "List the files in the current directory using ls. Reply with only the output.",

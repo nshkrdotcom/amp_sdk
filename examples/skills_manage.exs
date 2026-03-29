@@ -1,6 +1,12 @@
 # Skill lifecycle: add, info, remove
 # Run with: mix run examples/skills_manage.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
+alias Examples.Support
+
+Support.init!()
+
 IO.puts("=== Skills Manage ===\n")
 
 # Create a minimal skill directory with SKILL.md (required filename)
@@ -21,7 +27,7 @@ IO.puts("Created skill dir: #{skill_dir}")
 # Add
 IO.puts("\nAdding skill:")
 
-case AmpSdk.skills_add(skill_dir) do
+case Support.invoke(["skill", "add", skill_dir]) do
   {:ok, output} -> IO.puts("  #{String.trim(output)}")
   {:error, err} -> IO.puts("  Error: #{inspect(err)}")
 end
@@ -29,7 +35,7 @@ end
 # Info
 IO.puts("\nSkill info:")
 
-case AmpSdk.skills_info("amp-sdk-test-skill") do
+case Support.invoke(["skill", "info", "amp-sdk-test-skill"]) do
   {:ok, output} -> IO.puts("  #{String.trim(output)}")
   {:error, err} -> IO.puts("  Error: #{inspect(err)}")
 end
@@ -37,7 +43,7 @@ end
 # Remove
 IO.puts("\nRemoving skill:")
 
-case AmpSdk.skills_remove("amp-sdk-test-skill") do
+case Support.invoke(["skill", "remove", "amp-sdk-test-skill"]) do
   {:ok, output} -> IO.puts("  #{String.trim(output)}")
   {:error, err} -> IO.puts("  Error: #{inspect(err)}")
 end

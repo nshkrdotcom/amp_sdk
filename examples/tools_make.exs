@@ -1,13 +1,19 @@
 # Create a new tool
 # Run with: mix run examples/tools_make.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
+alias Examples.Support
+
+Support.init!()
+
 IO.puts("=== Tools Make ===\n")
 
 create_tool = fn create_tool, attempt ->
   suffix = Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
   tool_name = "amp-sdk-test-tool-#{System.system_time(:microsecond)}-#{suffix}"
 
-  case AmpSdk.tools_make(tool_name, timeout: 8_000) do
+  case AmpSdk.tools_make(tool_name, Support.command_opts(timeout: 8_000)) do
     {:ok, output} ->
       {:ok, tool_name, output}
 

@@ -1,6 +1,12 @@
 # Import tasks from a JSON file
 # Run with: mix run examples/tasks_import.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
+alias Examples.Support
+
+Support.init!()
+
 IO.puts("=== Tasks Import ===\n")
 
 # Create a temp tasks file — use --dry-run to validate without persisting
@@ -19,7 +25,7 @@ File.write!(tmp_path, Jason.encode!(tasks))
 IO.puts("Wrote tasks to: #{tmp_path}")
 
 # Use dry-run to validate without creating tasks
-case AmpSdk.tasks_import(tmp_path, dry_run: true) do
+case AmpSdk.tasks_import(tmp_path, Support.command_opts(dry_run: true)) do
   {:ok, output} -> IO.puts("Import result:\n#{output}")
   {:error, err} -> IO.puts("Error (may require valid repo URL): #{inspect(err)}")
 end

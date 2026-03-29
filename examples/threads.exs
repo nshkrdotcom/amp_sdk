@@ -2,15 +2,24 @@
 #
 # Run with: mix run examples/threads.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
 alias AmpSdk.Types.Options
+alias Examples.Support
+
+Support.init!()
 
 IO.puts("=== AmpSdk Threads ===\n")
 
 thread_id =
-  AmpSdk.execute("Reply with only: thread markdown sample", %Options{
-    dangerously_allow_all: true,
-    visibility: "private"
-  })
+  AmpSdk.execute(
+    "Reply with only: thread markdown sample",
+    %Options{
+      dangerously_allow_all: true,
+      visibility: "private"
+    }
+    |> Support.with_execution_surface()
+  )
   |> Enum.reduce(nil, fn message, acc ->
     case AmpSdk.Types.session_id(message) do
       nil -> acc
@@ -25,7 +34,7 @@ case thread_id do
   thread_id ->
     IO.puts("Created thread: #{thread_id}")
 
-    case AmpSdk.threads_markdown(thread_id) do
+    case Support.invoke(["threads", "markdown", thread_id]) do
       {:ok, markdown} ->
         IO.puts("\nThread markdown:\n#{markdown}")
 

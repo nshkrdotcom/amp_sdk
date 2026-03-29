@@ -13,13 +13,27 @@ Runnable examples demonstrating every public function of the Amp SDK for Elixir.
 
 ```bash
 ./examples/run_all.sh
+./examples/run_all.sh --ssh-host example.internal
 ```
 
 Or run individually:
 
 ```bash
 mix run examples/<name>.exs
+mix run examples/run_simple.exs -- --ssh-host example.internal
 ```
+
+## Shared SSH Flags
+
+Every example in this directory accepts the same optional SSH transport flags:
+
+- `--ssh-host <host>` switches the example to `execution_surface: :ssh_exec`
+- `--ssh-user <user>` overrides the SSH user
+- `--ssh-port <port>` overrides the SSH port
+- `--ssh-identity-file <path>` sets the SSH identity file
+
+If you omit the SSH flags, the examples keep the existing local subprocess
+default unchanged.
 
 ## Execute
 
@@ -75,3 +89,6 @@ mix run examples/<name>.exs
 2. End with `System.halt(0)` to prevent the BEAM from hanging
 3. Add a `run_example` call in `run_all.sh`
 4. Use `%Options{dangerously_allow_all: true}` for non-interactive execution
+5. Require `examples/support/example_helper.exs`, call `Support.init!()`, and
+   apply `Support.with_execution_surface/1` or `Support.command_opts/1` so the
+   shared SSH flags work consistently

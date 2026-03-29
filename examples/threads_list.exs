@@ -1,9 +1,15 @@
 # List all threads
 # Run with: mix run examples/threads_list.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
+alias Examples.Support
+
+Support.init!()
+
 IO.puts("=== Thread List ===\n")
 
-case AmpSdk.threads_list() do
+case AmpSdk.threads_list(Support.command_opts()) do
   {:ok, threads} ->
     IO.puts("Found #{length(threads)} thread(s)\n")
 

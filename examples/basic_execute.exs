@@ -2,7 +2,12 @@
 #
 # Run with: mix run examples/basic_execute.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
 alias AmpSdk.Types.Options
+alias Examples.Support
+
+Support.init!()
 
 IO.puts("=== AmpSdk Basic Execute ===\n")
 
@@ -11,7 +16,11 @@ prompt = "Respond with only the text: Hello from Elixir!"
 IO.puts("Prompt: #{prompt}")
 IO.puts("Streaming response...\n")
 
-AmpSdk.execute(prompt, %Options{dangerously_allow_all: true})
+AmpSdk.execute(
+  prompt,
+  %Options{dangerously_allow_all: true}
+  |> Support.with_execution_surface()
+)
 |> Enum.each(fn msg ->
   case msg do
     %AmpSdk.Types.SystemMessage{session_id: sid, tools: tools} ->

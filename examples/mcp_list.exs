@@ -1,9 +1,15 @@
 # List configured MCP servers
 # Run with: mix run examples/mcp_list.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
+alias Examples.Support
+
+Support.init!()
+
 IO.puts("=== MCP Servers ===\n")
 
-case AmpSdk.mcp_list() do
+case AmpSdk.mcp_list(Support.command_opts()) do
   {:ok, servers} ->
     IO.puts("Found #{length(servers)} MCP server(s)\n")
 

@@ -15,6 +15,8 @@ NC='\033[0m'
 PASS=0
 FAIL=0
 SKIP=0
+FORWARD_ARGS=()
+SSH_HOST=""
 
 cleanup() {
   echo ""
@@ -23,6 +25,18 @@ cleanup() {
 }
 
 trap cleanup INT TERM
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./examples/run_all.sh [--ssh-host HOST] [--ssh-user USER] [--ssh-port PORT] [--ssh-identity-file PATH]
+
+Examples:
+  ./examples/run_all.sh
+  ./examples/run_all.sh --ssh-host example.internal
+  ./examples/run_all.sh --ssh-host builder@example.internal --ssh-port 2222
+EOF
+}
 
 header() {
   echo ""
@@ -37,10 +51,18 @@ run_example() {
 
   echo ""
   echo -e "${YELLOW}▶ ${name}${NC}"
-  echo -e "  ${YELLOW}mix run examples/${file}${NC}"
+  if [ "${#FORWARD_ARGS[@]}" -gt 0 ]; then
+    echo -e "  ${YELLOW}mix run examples/${file} -- ${FORWARD_ARGS[*]}${NC}"
+  else
+    echo -e "  ${YELLOW}mix run examples/${file}${NC}"
+  fi
   echo ""
 
-  mix run "examples/${file}" 2>&1
+  if [ "${#FORWARD_ARGS[@]}" -gt 0 ]; then
+    mix run "examples/${file}" -- "${FORWARD_ARGS[@]}" 2>&1
+  else
+    mix run "examples/${file}" 2>&1
+  fi
   local exit_code=$?
 
   echo ""
@@ -56,22 +78,69 @@ run_example() {
   fi
 }
 
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --help|-h)
+      usage
+      exit 0
+      ;;
+    --ssh-host)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: --ssh-host requires a value." >&2
+        exit 1
+      fi
+
+      SSH_HOST="$2"
+      FORWARD_ARGS+=("$1" "$2")
+      shift 2
+      ;;
+    --ssh-user|--ssh-port|--ssh-identity-file)
+      if [[ $# -lt 2 ]]; then
+        echo "Error: $1 requires a value." >&2
+        exit 1
+      fi
+
+      FORWARD_ARGS+=("$1" "$2")
+      shift 2
+      ;;
+    --ssh-host=*|--ssh-user=*|--ssh-port=*|--ssh-identity-file=*)
+      if [[ "$1" == --ssh-host=* ]]; then
+        SSH_HOST="${1#*=}"
+      fi
+
+      FORWARD_ARGS+=("$1")
+      shift
+      ;;
+    *)
+      echo "Error: unknown argument: $1" >&2
+      echo >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+done
+
 # Pre-flight
 header "AmpSdk Examples Runner"
 echo ""
 echo "Checking prerequisites..."
 
-if ! command -v amp &> /dev/null; then
-  echo -e "${RED}Error: amp CLI not found.${NC}"
-  exit 1
-fi
-
-AMP_VER="$(amp --version 2>/dev/null | head -1)"
 ELIXIR_VER="$(elixir -e 'IO.write(System.version())' 2>/dev/null || echo 'unknown')"
 
-echo -e "  amp CLI:  ${GREEN}${AMP_VER}${NC}"
 echo -e "  Elixir:   ${GREEN}${ELIXIR_VER}${NC}"
 echo -e "  Project:  ${GREEN}${PROJECT_DIR}${NC}"
+
+if [[ -n "$SSH_HOST" ]]; then
+  echo -e "  Surface:  ${GREEN}ssh_exec host=${SSH_HOST}${NC}"
+else
+  if ! command -v amp &> /dev/null; then
+    echo -e "${RED}Error: amp CLI not found.${NC}"
+    exit 1
+  fi
+
+  AMP_VER="$(amp --version 2>/dev/null | head -1)"
+  echo -e "  amp CLI:  ${GREEN}${AMP_VER}${NC}"
+fi
 
 header "Compiling"
 mix compile --warnings-as-errors

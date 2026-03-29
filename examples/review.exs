@@ -1,9 +1,21 @@
 # Code review example
 # Run with: mix run examples/review.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
+alias Examples.Support
+
+Support.init!()
+
 IO.puts("=== Code Review ===\n")
 
-case AmpSdk.review(files: ["lib/amp_sdk.ex"], summary_only: true, dangerously_allow_all: true) do
+case AmpSdk.review(
+       Support.command_opts(
+         files: ["lib/amp_sdk.ex"],
+         summary_only: true,
+         dangerously_allow_all: true
+       )
+     ) do
   {:ok, output} ->
     result = String.trim(output)
 

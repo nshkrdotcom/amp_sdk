@@ -1,6 +1,12 @@
 # MCP OAuth operations
 # Run with: mix run examples/mcp_oauth.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
+alias Examples.Support
+
+Support.init!()
+
 IO.puts("=== MCP OAuth ===\n")
 
 server_name = System.get_env("AMP_MCP_OAUTH_SERVER")
@@ -15,7 +21,7 @@ end
 
 IO.puts("Checking OAuth status for '#{server_name}':")
 
-case AmpSdk.mcp_oauth_status(server_name, timeout: timeout_ms) do
+case AmpSdk.mcp_oauth_status(server_name, Support.command_opts(timeout: timeout_ms)) do
   {:ok, output} ->
     IO.puts("  #{String.trim(output)}")
 
@@ -26,7 +32,7 @@ end
 
 IO.puts("\nOAuth logout for '#{server_name}':")
 
-case AmpSdk.mcp_oauth_logout(server_name, timeout: timeout_ms) do
+case AmpSdk.mcp_oauth_logout(server_name, Support.command_opts(timeout: timeout_ms)) do
   {:ok, output} ->
     IO.puts("  #{String.trim(output)}")
 
@@ -57,7 +63,7 @@ login_opts =
   |> maybe_put_env_opt.("AMP_MCP_OAUTH_TOKEN_URL", :token_url)
 
 if System.get_env("AMP_MCP_OAUTH_RUN_LOGIN", "0") == "1" do
-  case AmpSdk.mcp_oauth_login(server_name, login_opts) do
+  case AmpSdk.mcp_oauth_login(server_name, Support.command_opts(login_opts)) do
     {:ok, output} ->
       IO.puts("  #{String.trim(output)}")
 

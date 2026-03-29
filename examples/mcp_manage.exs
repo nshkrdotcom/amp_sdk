@@ -1,6 +1,12 @@
 # MCP server lifecycle: add, approve, remove
 # Run with: mix run examples/mcp_manage.exs
 
+Code.require_file(Path.expand("support/example_helper.exs", __DIR__))
+
+alias Examples.Support
+
+Support.init!()
+
 IO.puts("=== MCP Manage ===\n")
 
 server_name = "amp-sdk-test-echo-#{System.unique_integer([:positive])}"
@@ -8,7 +14,11 @@ server_name = "amp-sdk-test-echo-#{System.unique_integer([:positive])}"
 # Add a local MCP server (stdio)
 IO.puts("Adding MCP server '#{server_name}':")
 
-case AmpSdk.mcp_add(server_name, ["echo", "hello"], env: %{}, workspace: true) do
+case AmpSdk.mcp_add(
+       server_name,
+       ["echo", "hello"],
+       Support.command_opts(env: %{}, workspace: true)
+     ) do
   {:ok, output} -> IO.puts("  #{String.trim(output)}")
   {:error, err} -> IO.puts("  Error: #{inspect(err)}")
 end
@@ -16,7 +26,7 @@ end
 # Approve the server
 IO.puts("\nApproving:")
 
-case AmpSdk.mcp_approve(server_name) do
+case Support.invoke(["mcp", "approve", server_name]) do
   {:ok, output} -> IO.puts("  #{String.trim(output)}")
   {:error, err} -> IO.puts("  Error: #{inspect(err)}")
 end
@@ -24,7 +34,7 @@ end
 # Remove the server (cleanup)
 IO.puts("\nRemoving:")
 
-case AmpSdk.mcp_remove(server_name) do
+case Support.invoke(["mcp", "remove", server_name]) do
   {:ok, output} -> IO.puts("  #{String.trim(output)}")
   {:error, err} -> IO.puts("  Error: #{inspect(err)}")
 end
