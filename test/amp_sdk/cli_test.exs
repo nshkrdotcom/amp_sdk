@@ -6,7 +6,7 @@ defmodule AmpSdk.CLITest do
   alias AmpSdk.TestSupport
   alias CliSubprocessCore.CommandSpec
 
-  describe "resolve/0" do
+  describe "resolve/1" do
     test "finds amp via AMP_CLI_PATH env var" do
       case System.find_executable("amp") do
         nil ->
@@ -72,9 +72,19 @@ defmodule AmpSdk.CLITest do
         File.rm_rf(home_dir)
       end
     end
+
+    test "remote execution surface ignores local AMP_CLI_PATH and uses the remote amp command" do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => "/nonexistent/local/amp"}, fn ->
+        assert {:ok, %CommandSpec{program: "amp", argv_prefix: []}} =
+                 CLI.resolve(
+                   surface_kind: :static_ssh,
+                   transport_options: [destination: "amp.remote.example"]
+                 )
+      end)
+    end
   end
 
-  describe "resolve!/0" do
+  describe "resolve!/1" do
     test "returns command spec on success" do
       case System.find_executable("amp") do
         nil ->

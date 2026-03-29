@@ -51,12 +51,62 @@ defmodule AmpSdk.OptionsTest do
       assert validated.execution_surface.observability == %{lane: :amp}
     end
 
-    test "raises when execution_surface is not a core execution surface struct" do
-      assert_raise ArgumentError,
-                   ~r/execution_surface must be a %CliSubprocessCore.ExecutionSurface{}/,
-                   fn ->
-                     Options.validate!(%Options{execution_surface: %{surface_kind: :static_ssh}})
-                   end
+    test "normalizes execution_surface maps and keywords into the canonical core struct" do
+      from_map =
+        Options.validate!(%Options{
+          execution_surface: %{
+            "surface_kind" => :static_ssh,
+            "transport_options" => [destination: "amp-map.example"],
+            "target_id" => "amp-map-target"
+          }
+        })
+
+      from_keyword =
+        Options.validate!(%Options{
+          execution_surface: [
+            surface_kind: :static_ssh,
+            transport_options: [destination: "amp-keyword.example"],
+            target_id: "amp-keyword-target"
+          ]
+        })
+
+      assert %ExecutionSurface{} = from_map.execution_surface
+      assert from_map.execution_surface.transport_options[:destination] == "amp-map.example"
+      assert from_map.execution_surface.target_id == "amp-map-target"
+
+      assert %ExecutionSurface{} = from_keyword.execution_surface
+
+      assert from_keyword.execution_surface.transport_options[:destination] ==
+               "amp-keyword.example"
+
+      assert from_keyword.execution_surface.target_id == "amp-keyword-target"
+    end
+
+    test "raises when execution_surface cannot be normalized" do
+      assert_raise ArgumentError, ~r/execution_surface is invalid/, fn ->
+        Options.validate!(%Options{execution_surface: 123})
+      end
+    end
+
+    test "execution_surface_opts/1 accepts either an options struct or a surface struct" do
+      surface =
+        Options.validate!(%Options{
+          execution_surface: [
+            surface_kind: :static_ssh,
+            transport_options: [destination: "amp-opts.example"],
+            target_id: "amp-opts-target"
+          ]
+        }).execution_surface
+
+      assert Options.execution_surface_opts(surface)[:target_id] == "amp-opts-target"
+
+      assert Options.execution_surface_opts(%Options{execution_surface: surface})[:target_id] ==
+               "amp-opts-target"
+
+      assert Options.execution_surface_opts(surface)[:transport_options][:destination] ==
+               "amp-opts.example"
+
+      assert Options.execution_surface_opts(nil) == []
     end
   end
 end

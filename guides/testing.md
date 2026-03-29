@@ -64,11 +64,13 @@ end
 
 ## Integration Tests (Live)
 
-Tag live tests with `@tag :live` and exclude them by default:
+Tag live tests with `@tag :live` and exclude them by default. SSH-backed smoke
+tests should use a separate `:live_ssh` tag so local live CLI coverage and
+remote transport coverage can be run independently:
 
 ```elixir
 # test/test_helper.exs
-ExUnit.start(exclude: [:live])
+ExUnit.start(exclude: [:live, :live_ssh])
 ```
 
 ```elixir
@@ -92,6 +94,14 @@ Run live tests:
 
 ```bash
 mix test --include live
+```
+
+Run live SSH smoke tests with the shared core harness:
+
+```bash
+CLI_SUBPROCESS_CORE_LIVE_SSH=1 \
+CLI_SUBPROCESS_CORE_LIVE_SSH_DESTINATION=luhome \
+mix test --only live_ssh --include live_ssh
 ```
 
 ## Testing Argument Building

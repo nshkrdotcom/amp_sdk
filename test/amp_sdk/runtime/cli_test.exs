@@ -16,7 +16,7 @@ defmodule AmpSdk.Runtime.CLITest do
     sleep 60
     """
 
-    TestSupport.write_executable!(dir, "amp_runtime_stub", script)
+    TestSupport.write_executable!(dir, "amp", script)
   end
 
   describe "start_session/1" do
@@ -101,7 +101,7 @@ defmodule AmpSdk.Runtime.CLITest do
 
     test "preserves execution_surface through the shared session lane" do
       dir = TestSupport.tmp_dir!("amp_runtime_cli_fake_ssh")
-      stub_path = write_runtime_stub!(dir)
+      _stub_path = write_runtime_stub!(dir)
       fake_ssh = FakeSSH.new!()
       session_ref = make_ref()
 
@@ -114,31 +114,32 @@ defmodule AmpSdk.Runtime.CLITest do
               ssh_options: [BatchMode: "yes"]
             ),
           target_id: "amp-runtime-target"
+        },
+        env: %{
+          "PATH" => dir <> ":" <> (System.get_env("PATH") || "")
         }
       }
 
       try do
-        TestSupport.with_env(%{"AMP_CLI_PATH" => stub_path}, fn ->
-          assert {:ok, session, %{info: info, temp_dir: temp_dir}} =
-                   CLI.start_session(
-                     input: "hello over ssh",
-                     options: options,
-                     subscriber: {self(), session_ref}
-                   )
+        assert {:ok, session, %{info: info, temp_dir: temp_dir}} =
+                 CLI.start_session(
+                   input: "hello over ssh",
+                   options: options,
+                   subscriber: {self(), session_ref}
+                 )
 
-          assert info.transport.info.surface_kind == :static_ssh
-          assert info.transport.info.target_id == "amp-runtime-target"
-          assert info.transport.info.adapter_metadata.destination == "runtime.ssh.example"
-          assert info.transport.info.adapter_metadata.ssh_path == fake_ssh.ssh_path
+        assert info.transport.info.surface_kind == :static_ssh
+        assert info.transport.info.target_id == "amp-runtime-target"
+        assert info.transport.info.adapter_metadata.destination == "runtime.ssh.example"
+        assert info.transport.info.adapter_metadata.ssh_path == fake_ssh.ssh_path
 
-          assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
-          assert FakeSSH.read_manifest!(fake_ssh) =~ "destination=runtime.ssh.example"
-          assert temp_dir == nil
+        assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
+        assert FakeSSH.read_manifest!(fake_ssh) =~ "destination=runtime.ssh.example"
+        assert temp_dir == nil
 
-          session_monitor_ref = Process.monitor(session)
-          assert :ok = CLI.close(session)
-          assert_receive {:DOWN, ^session_monitor_ref, :process, ^session, :normal}, 2_000
-        end)
+        session_monitor_ref = Process.monitor(session)
+        assert :ok = CLI.close(session)
+        assert_receive {:DOWN, ^session_monitor_ref, :process, ^session, :normal}, 2_000
       after
         FakeSSH.cleanup(fake_ssh)
         File.rm_rf(dir)

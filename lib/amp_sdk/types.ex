@@ -1204,7 +1204,7 @@ defmodule AmpSdk.Types do
             labels: [String.t()] | nil,
             thinking: boolean(),
             model_payload: CliSubprocessCore.ModelRegistry.selection() | map() | nil,
-            execution_surface: ExecutionSurface.t() | nil,
+            execution_surface: ExecutionSurface.t() | map() | keyword() | nil,
             stream_timeout_ms: pos_integer(),
             max_stderr_buffer_bytes: pos_integer(),
             no_ide: boolean(),
@@ -1245,17 +1245,52 @@ defmodule AmpSdk.Types do
       |> normalize_execution_surface!()
     end
 
-    @spec execution_surface_opts(t()) :: keyword()
+    @doc false
+    @spec execution_surface_opts(t() | ExecutionSurface.t() | nil) :: keyword()
     def execution_surface_opts(%__MODULE__{} = options) do
       case Map.get(options, :execution_surface, nil) do
         nil ->
           []
 
         %ExecutionSurface{} = surface ->
-          [transport_options: surface.transport_options] ++
-            ExecutionSurface.surface_metadata(surface)
+          execution_surface_opts(surface)
       end
     end
+
+    def execution_surface_opts(%ExecutionSurface{} = surface) do
+      [transport_options: surface.transport_options] ++ ExecutionSurface.surface_metadata(surface)
+    end
+
+    def execution_surface_opts(nil), do: []
+
+    @doc false
+    @spec normalize_execution_surface(term()) ::
+            {:ok, ExecutionSurface.t() | nil} | {:error, term()}
+    def normalize_execution_surface(nil), do: {:ok, nil}
+
+    def normalize_execution_surface(%ExecutionSurface{} = execution_surface) do
+      ExecutionSurface.new(
+        transport_options: execution_surface.transport_options,
+        surface_kind: execution_surface.surface_kind,
+        target_id: execution_surface.target_id,
+        lease_ref: execution_surface.lease_ref,
+        surface_ref: execution_surface.surface_ref,
+        boundary_class: execution_surface.boundary_class,
+        observability: execution_surface.observability
+      )
+    end
+
+    def normalize_execution_surface(execution_surface) when is_list(execution_surface) do
+      ExecutionSurface.new(execution_surface)
+    end
+
+    def normalize_execution_surface(%{} = execution_surface) do
+      execution_surface
+      |> execution_surface_attrs()
+      |> ExecutionSurface.new()
+    end
+
+    def normalize_execution_surface(other), do: {:error, {:invalid_execution_surface, other}}
 
     defp normalize_model_payload!(%__MODULE__{model_payload: nil} = options), do: options
 
@@ -1270,31 +1305,26 @@ defmodule AmpSdk.Types do
     end
 
     defp normalize_execution_surface!(%__MODULE__{} = options) do
-      case Map.get(options, :execution_surface, nil) do
-        nil ->
-          Map.put(options, :execution_surface, nil)
+      case normalize_execution_surface(Map.get(options, :execution_surface, nil)) do
+        {:ok, normalized} ->
+          %{options | execution_surface: normalized}
 
-        %ExecutionSurface{} = surface ->
-          case ExecutionSurface.new(
-                 transport_options: surface.transport_options,
-                 surface_kind: surface.surface_kind,
-                 target_id: surface.target_id,
-                 lease_ref: surface.lease_ref,
-                 surface_ref: surface.surface_ref,
-                 boundary_class: surface.boundary_class,
-                 observability: surface.observability
-               ) do
-            {:ok, %ExecutionSurface{} = normalized} ->
-              %{options | execution_surface: normalized}
-
-            {:error, reason} ->
-              raise ArgumentError, "execution_surface is invalid: #{inspect(reason)}"
-          end
-
-        execution_surface ->
-          raise ArgumentError,
-                "execution_surface must be a %CliSubprocessCore.ExecutionSurface{}, got: #{inspect(execution_surface)}"
+        {:error, reason} ->
+          raise ArgumentError, "execution_surface is invalid: #{inspect(reason)}"
       end
+    end
+
+    defp execution_surface_attrs(attrs) when is_map(attrs) do
+      [
+        surface_kind: Map.get(attrs, :surface_kind, Map.get(attrs, "surface_kind")),
+        transport_options:
+          Map.get(attrs, :transport_options, Map.get(attrs, "transport_options")),
+        target_id: Map.get(attrs, :target_id, Map.get(attrs, "target_id")),
+        lease_ref: Map.get(attrs, :lease_ref, Map.get(attrs, "lease_ref")),
+        surface_ref: Map.get(attrs, :surface_ref, Map.get(attrs, "surface_ref")),
+        boundary_class: Map.get(attrs, :boundary_class, Map.get(attrs, "boundary_class")),
+        observability: Map.get(attrs, :observability, Map.get(attrs, "observability", %{}))
+      ]
     end
 
     defp validate_positive_integer!(%__MODULE__{} = options, field) when is_atom(field) do

@@ -38,7 +38,7 @@ defmodule AmpSdk.CommandTest do
     echo "${AMP_TEST_OUTPUT:-ok}"
     """
 
-    TestSupport.write_executable!(dir, "amp_stub", script)
+    TestSupport.write_executable!(dir, "amp", script)
   end
 
   defp write_stubborn_amp_stub!(dir) do
@@ -57,7 +57,7 @@ defmodule AmpSdk.CommandTest do
     tail -f /dev/null
     """
 
-    TestSupport.write_executable!(dir, "amp_stubborn_stub", script)
+    TestSupport.write_executable!(dir, "amp", script)
   end
 
   defp process_alive?(pid) when is_integer(pid) do
@@ -277,34 +277,31 @@ defmodule AmpSdk.CommandTest do
   test "run/2 preserves execution_surface through the shared command lane" do
     dir = TestSupport.tmp_dir!("amp_command_fake_ssh")
     args_file = Path.join(dir, "args.txt")
-    amp_path = write_amp_stub!(dir)
+    _amp_path = write_amp_stub!(dir)
     fake_ssh = FakeSSH.new!()
 
     try do
-      TestSupport.with_env(
-        %{
-          "AMP_CLI_PATH" => amp_path,
-          "AMP_TEST_ARGS_FILE" => args_file,
-          "AMP_TEST_OUTPUT" => "ssh-done"
-        },
-        fn ->
-          execution_surface = %ExecutionSurface{
-            surface_kind: :static_ssh,
-            transport_options:
-              FakeSSH.transport_options(fake_ssh, destination: "amp.command.example")
-          }
+      execution_surface = %ExecutionSurface{
+        surface_kind: :static_ssh,
+        transport_options: FakeSSH.transport_options(fake_ssh, destination: "amp.command.example")
+      }
 
-          assert {:ok, "ssh-done"} =
-                   Command.run(["threads", "list"], execution_surface: execution_surface)
+      assert {:ok, "ssh-done"} =
+               Command.run(["threads", "list"],
+                 env: %{
+                   "AMP_TEST_ARGS_FILE" => args_file,
+                   "AMP_TEST_OUTPUT" => "ssh-done",
+                   "PATH" => dir <> ":" <> (System.get_env("PATH") || "")
+                 },
+                 execution_surface: execution_surface
+               )
 
-          assert File.read!(args_file) == "threads\nlist\n"
-          assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
+      assert File.read!(args_file) == "threads\nlist\n"
+      assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
 
-          manifest = FakeSSH.read_manifest!(fake_ssh)
-          assert manifest =~ "destination=amp.command.example"
-          assert manifest =~ "remote_command="
-        end
-      )
+      manifest = FakeSSH.read_manifest!(fake_ssh)
+      assert manifest =~ "destination=amp.command.example"
+      assert manifest =~ "remote_command="
     after
       FakeSSH.cleanup(fake_ssh)
       File.rm_rf(dir)

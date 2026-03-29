@@ -103,6 +103,10 @@ The SDK locates the Amp CLI automatically by checking, in order:
 | 3 | `~/.local/bin/amp` | Symlink from install script |
 | 4 | System `PATH` | Standard executable lookup |
 
+When `execution_surface` targets SSH, `amp_sdk` does not forward a local
+`AMP_CLI_PATH` into remote execution. Remote surfaces resolve the provider
+command as `amp` and expect that binary to exist on the remote `PATH`.
+
 ---
 
 ## Quick Start
@@ -296,7 +300,7 @@ All execution behavior is controlled through `AmpSdk.Types.Options`:
   labels: nil,                        # Thread labels (max 20, alphanumeric + hyphens)
   thinking: false,                    # Use --stream-json-thinking when prompt is a string
   model_payload: nil,                 # Shared core Selection (or a canonicalizable map form)
-  execution_surface: nil,             # Optional CliSubprocessCore.ExecutionSurface
+  execution_surface: nil,             # Optional ExecutionSurface struct, map, or keyword
   stream_timeout_ms: 300_000,         # Receive timeout for stream events
   no_ide: false,                      # Disable IDE context injection
   no_notifications: false,            # Disable notification sounds

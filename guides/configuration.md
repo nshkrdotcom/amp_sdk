@@ -30,7 +30,7 @@ For model selection specifically, Amp is payload-only in this repo today:
 | `labels` | `[String.t()]` | `nil` | Thread labels (max 20) |
 | `thinking` | `boolean()` | `false` | Use `--stream-json-thinking` for string prompts |
 | `model_payload` | `Selection.t() \| map() \| nil` | `nil` | Shared core model-selection payload |
-| `execution_surface` | `ExecutionSurface.t() \| nil` | `nil` | Shared core execution surface for local or SSH placement |
+| `execution_surface` | `ExecutionSurface.t() \| map() \| keyword() \| nil` | `nil` | Shared core execution surface for local or SSH placement |
 | `stream_timeout_ms` | `pos_integer()` | `300_000` | Stream receive timeout in milliseconds |
 | `no_ide` | `boolean()` | `false` | Disable IDE context injection (`--no-ide`) |
 | `no_notifications` | `boolean()` | `false` | Disable sound notifications (`--no-notifications`) |
@@ -56,8 +56,9 @@ attached to the payload instead of being nested under `:extra`.
 
 ## Shared Core Execution Surface
 
-When you need SSH placement or other shared-core transport routing, pass a
-`CliSubprocessCore.ExecutionSurface` through `Options.execution_surface`:
+When you need SSH placement or other shared-core transport routing, pass an
+execution surface through `Options.execution_surface` as a struct, map, or
+keyword list:
 
 ```elixir
 alias AmpSdk.Types.Options
@@ -69,6 +70,13 @@ surface = %ExecutionSurface{
 }
 
 AmpSdk.run("Inspect the remote workspace", %Options{execution_surface: surface})
+
+Amp normalizes all three public forms into the canonical shared-core struct
+during `Options.validate!/1`.
+
+On remote SSH surfaces, local `AMP_CLI_PATH` overrides are intentionally
+ignored. The remote host is expected to expose `amp` on its own `PATH`, or to
+provide an explicit remote command via the broader core transport layer.
 ```
 
 ## Agent Modes
@@ -200,7 +208,7 @@ The SDK locates the Amp CLI by checking (in order):
 3. `~/.local/bin/amp`
 4. System `PATH`
 
-Use `AmpSdk.CLI.resolve/0` to inspect the command spec:
+Use `AmpSdk.CLI.resolve/1` to inspect the command spec:
 
 ```elixir
 {:ok, spec} = AmpSdk.CLI.resolve()

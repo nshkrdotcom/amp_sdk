@@ -8,9 +8,10 @@ defmodule AmpSdk.CLI do
 
   @type resolution_result :: {:ok, CommandSpec.t()} | {:error, Error.t()}
 
-  @spec resolve() :: resolution_result()
-  def resolve do
-    case ProviderCLI.resolve(:amp) do
+  @spec resolve(CliSubprocessCore.ExecutionSurface.t() | map() | keyword() | nil) ::
+          resolution_result()
+  def resolve(execution_surface \\ nil) do
+    case ProviderCLI.resolve(:amp, [], execution_surface: execution_surface) do
       {:ok, %CommandSpec{} = spec} ->
         {:ok, spec}
 
@@ -19,9 +20,10 @@ defmodule AmpSdk.CLI do
     end
   end
 
-  @spec resolve!() :: CommandSpec.t()
-  def resolve!() do
-    case resolve() do
+  @spec resolve!(CliSubprocessCore.ExecutionSurface.t() | map() | keyword() | nil) ::
+          CommandSpec.t()
+  def resolve!(execution_surface \\ nil) do
+    case resolve(execution_surface) do
       {:ok, %CommandSpec{} = spec} ->
         spec
 

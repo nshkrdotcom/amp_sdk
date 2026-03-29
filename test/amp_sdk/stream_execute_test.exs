@@ -26,7 +26,7 @@ defmodule AmpSdk.StreamExecuteTest do
     fi
     """
 
-    TestSupport.write_executable!(dir, "amp_stream_stub", script)
+    TestSupport.write_executable!(dir, "amp", script)
   end
 
   defp write_prompt_arg_stub!(dir) do
@@ -47,7 +47,7 @@ defmodule AmpSdk.StreamExecuteTest do
     echo '{"type":"result","subtype":"success","is_error":false,"result":"ok","duration_ms":1,"num_turns":1}'
     """
 
-    TestSupport.write_executable!(dir, "amp_stream_prompt_arg_stub", script)
+    TestSupport.write_executable!(dir, "amp", script)
   end
 
   defp write_stderr_exit_stub!(dir) do
@@ -60,7 +60,7 @@ defmodule AmpSdk.StreamExecuteTest do
     exit 7
     """
 
-    TestSupport.write_executable!(dir, "amp_stream_stderr_exit_stub", script)
+    TestSupport.write_executable!(dir, "amp", script)
   end
 
   defp write_large_stderr_exit_stub!(dir) do
@@ -75,7 +75,7 @@ defmodule AmpSdk.StreamExecuteTest do
     exit 9
     """
 
-    TestSupport.write_executable!(dir, "amp_stream_large_stderr_exit_stub", script)
+    TestSupport.write_executable!(dir, "amp", script)
   end
 
   test "execute/2 accepts user input message lists" do
@@ -175,7 +175,7 @@ defmodule AmpSdk.StreamExecuteTest do
 
   test "execute/2 preserves execution_surface through the shared stream lane" do
     dir = TestSupport.tmp_dir!("amp_stream_fake_ssh")
-    amp_path = write_stream_stub!(dir)
+    _amp_path = write_stream_stub!(dir)
     fake_ssh = FakeSSH.new!()
 
     output_json =
@@ -190,32 +190,32 @@ defmodule AmpSdk.StreamExecuteTest do
       })
 
     try do
-      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
-        execution_surface = %ExecutionSurface{
-          surface_kind: :static_ssh,
-          transport_options:
-            FakeSSH.transport_options(fake_ssh, destination: "amp.stream.example"),
-          target_id: "amp-stream-target"
-        }
+      execution_surface = %ExecutionSurface{
+        surface_kind: :static_ssh,
+        transport_options: FakeSSH.transport_options(fake_ssh, destination: "amp.stream.example"),
+        target_id: "amp-stream-target"
+      }
 
-        messages =
-          AmpSdk.execute("hello over ssh", %Options{
-            execution_surface: execution_surface,
-            env: %{"AMP_TEST_OUTPUT_JSON" => output_json}
-          })
-          |> Enum.to_list()
+      messages =
+        AmpSdk.execute("hello over ssh", %Options{
+          execution_surface: execution_surface,
+          env: %{
+            "AMP_TEST_OUTPUT_JSON" => output_json,
+            "PATH" => dir <> ":" <> (System.get_env("PATH") || "")
+          }
+        })
+        |> Enum.to_list()
 
-        assert [
-                 %SystemMessage{session_id: "T-stream-ssh"},
-                 %ResultMessage{session_id: "T-stream-ssh", result: "ssh-ok"}
-               ] = messages
+      assert [
+               %SystemMessage{session_id: "T-stream-ssh"},
+               %ResultMessage{session_id: "T-stream-ssh", result: "ssh-ok"}
+             ] = messages
 
-        assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
+      assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
 
-        manifest = FakeSSH.read_manifest!(fake_ssh)
-        assert manifest =~ "destination=amp.stream.example"
-        assert manifest =~ "remote_command="
-      end)
+      manifest = FakeSSH.read_manifest!(fake_ssh)
+      assert manifest =~ "destination=amp.stream.example"
+      assert manifest =~ "remote_command="
     after
       FakeSSH.cleanup(fake_ssh)
       File.rm_rf(dir)

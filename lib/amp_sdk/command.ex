@@ -4,6 +4,7 @@ defmodule AmpSdk.Command do
   """
 
   alias AmpSdk.{CLI, Defaults, Env, Error}
+  alias AmpSdk.Types.Options
   alias CliSubprocessCore.Command, as: CoreCommand
   alias CliSubprocessCore.Command.Error, as: CoreCommandError
   alias CliSubprocessCore.CommandSpec
@@ -19,11 +20,11 @@ defmodule AmpSdk.Command do
           | {:trim_output, boolean()}
           | {:cd, String.t()}
           | {:env, map() | keyword()}
-          | {:execution_surface, ExecutionSurface.t()}
+          | {:execution_surface, ExecutionSurface.t() | map() | keyword()}
 
   @spec run([String.t()], [run_opt()]) :: {:ok, String.t()} | {:error, Error.t()}
   def run(args, opts \\ []) when is_list(args) and is_list(opts) do
-    with {:ok, command} <- CLI.resolve() do
+    with {:ok, command} <- CLI.resolve(Keyword.get(opts, :execution_surface)) do
       run(command, args, opts)
     end
   end
@@ -141,21 +142,19 @@ defmodule AmpSdk.Command do
   defp normalize_env(nil), do: %{}
   defp normalize_env(env) when is_map(env) or is_list(env), do: Env.normalize_overrides(env)
 
-  defp execution_surface_opts(nil), do: {:ok, []}
-
-  defp execution_surface_opts(%ExecutionSurface{} = execution_surface) do
-    {:ok,
-     [transport_options: execution_surface.transport_options] ++
-       ExecutionSurface.surface_metadata(execution_surface)}
-  end
-
   defp execution_surface_opts(execution_surface) do
-    {:error,
-     Error.new(
-       :invalid_configuration,
-       "execution_surface must be a %CliSubprocessCore.ExecutionSurface{}",
-       cause: execution_surface
-     )}
+    case Options.normalize_execution_surface(execution_surface) do
+      {:ok, normalized} ->
+        {:ok, Options.execution_surface_opts(normalized)}
+
+      {:error, reason} ->
+        {:error,
+         Error.new(
+           :invalid_configuration,
+           "invalid execution_surface: #{inspect(reason)}",
+           cause: reason
+         )}
+    end
   end
 
   defp format_reason(%_{} = exception) when is_exception(exception),

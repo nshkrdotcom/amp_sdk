@@ -97,7 +97,7 @@ defmodule AmpSdk.Runtime.CLI do
     options = opts |> Keyword.get(:options, %Options{}) |> Options.validate!()
     input_mode = input_mode(input)
 
-    with {:ok, %CommandSpec{} = command_spec} <- CLI.resolve(),
+    with {:ok, %CommandSpec{} = command_spec} <- CLI.resolve(options.execution_surface),
          {:ok, settings_path, temp_dir} <- build_settings_file(options) do
       session_opts =
         build_session_options(
