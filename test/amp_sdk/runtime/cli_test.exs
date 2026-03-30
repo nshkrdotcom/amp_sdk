@@ -179,6 +179,34 @@ defmodule AmpSdk.Runtime.CLITest do
         File.rm_rf(dir)
       end
     end
+
+    test "does not leak the local cwd into guest-path session invocations" do
+      dir = TestSupport.tmp_dir!("amp_runtime_cli_guest_cwd")
+      _stub_path = write_runtime_stub!(dir)
+      session_ref = make_ref()
+
+      options = %Options{
+        execution_surface: %ExecutionSurface{surface_kind: :test_guest_local},
+        env: %{"PATH" => dir <> ":" <> (System.get_env("PATH") || "")}
+      }
+
+      try do
+        assert {:ok, session, %{info: info}} =
+                 CLI.start_session(
+                   input: "hello over guest path semantics",
+                   options: options,
+                   subscriber: {self(), session_ref}
+                 )
+
+        assert info.invocation.cwd == nil
+
+        session_monitor_ref = Process.monitor(session)
+        assert :ok = CLI.close(session)
+        assert_receive {:DOWN, ^session_monitor_ref, :process, ^session, :normal}, 2_000
+      after
+        File.rm_rf(dir)
+      end
+    end
   end
 
   describe "Profile.transport_options/1" do

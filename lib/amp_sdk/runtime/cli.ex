@@ -538,7 +538,7 @@ defmodule AmpSdk.Runtime.CLI do
   defp default_cwd(cwd, _execution_surface) when is_binary(cwd) and cwd != "", do: cwd
 
   defp default_cwd(_cwd, execution_surface) do
-    if ExecutionSurface.remote_surface?(execution_surface), do: nil, else: File.cwd!()
+    if ExecutionSurface.nonlocal_path_surface?(execution_surface), do: nil, else: File.cwd!()
   end
 
   defp build_invocation_args(%Options{} = options, input_mode, opts) do
