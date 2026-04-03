@@ -168,6 +168,8 @@ run_example "No-IDE / Headless Flags"          "no_ide_mode.exs"
 run_example "Thread Continuation"              "continue_thread.exs"
 run_example "With Permissions"                 "with_permissions.exs"
 
+# `continue_thread.exs` is the recovery/session-history example for the hardening lane.
+
 # --- Management ---
 header "Management"
 run_example "Usage & Credits"                  "usage.exs"

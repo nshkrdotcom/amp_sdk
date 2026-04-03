@@ -99,3 +99,13 @@ example into the permissive runtime flag that the Amp CLI already exposes.
 5. Require `examples/support/example_helper.exs`, call `Support.init!()`, and
    apply `Support.with_execution_surface/1` or `Support.command_opts/1` so the
    shared SSH and `--danger-full-access` flags work consistently
+## Recovery-Oriented Examples
+
+For the emergency hardening lane, the most relevant existing examples are:
+
+- `examples/continue_thread.exs`
+- `examples/threads.exs`
+- `examples/thread_lifecycle.exs`
+
+`examples/run_all.sh` already includes the continuation and thread-management demos in its standard
+execution sequence.

@@ -177,3 +177,14 @@ thread_id =
 | `threads_handoff/2` | Create a handoff thread (opts: `goal`, `print`, `input`, `timeout`) |
 | `threads_replay/2` | Replay a thread (opts: `wpm`, `no_typing`, `message_delay`, `tool_progress_delay`, `exit_delay`, `no_indicator`) |
 | `threads_markdown/1` | Export thread as Markdown |
+## Standardized Thread Projection
+
+The native Amp thread model is still the source of truth, but the runtime layer now offers a
+standardized projection for upper orchestration repos:
+
+- `AmpSdk.Runtime.CLI.capabilities/0`
+- `AmpSdk.Runtime.CLI.list_provider_sessions/1`
+
+That projection is deliberately history-focused. It lets the caller list and resume known Amp
+threads without pretending that Amp shares the exact same prompt/control semantics as the other
+providers.

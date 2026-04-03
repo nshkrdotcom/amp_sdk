@@ -20,6 +20,12 @@ defmodule AmpSdk.Runtime.CLI do
 
   @runtime_metadata %{lane: :amp_sdk}
   @default_session_event_tag :amp_sdk_runtime_cli
+  @session_control_capabilities [
+    :session_history,
+    :session_resume,
+    :session_pause,
+    :session_intervene
+  ]
 
   @type execute_input :: String.t() | [Types.UserInputMessage.t() | map()]
 
@@ -168,7 +174,31 @@ defmodule AmpSdk.Runtime.CLI do
   def info(session) when is_pid(session), do: Session.info(session)
 
   @spec capabilities() :: [atom()]
-  def capabilities, do: CoreAmp.capabilities()
+  def capabilities do
+    (CoreAmp.capabilities() ++ @session_control_capabilities)
+    |> Enum.uniq()
+  end
+
+  @spec list_provider_sessions(keyword()) :: {:ok, [map()]} | {:error, term()}
+  def list_provider_sessions(opts \\ []) when is_list(opts) do
+    with {:ok, sessions} <- AmpSdk.threads_list(opts) do
+      {:ok,
+       Enum.map(sessions, fn session ->
+         %{
+           id: session.id,
+           label: session.title,
+           cwd: nil,
+           updated_at: session.last_updated,
+           source_kind: :thread_history,
+           metadata: %{
+             visibility: session.visibility,
+             messages: session.messages
+           },
+           raw: Map.from_struct(session)
+         }
+       end)}
+    end
+  end
 
   @doc false
   @spec session_event_tag() :: atom()

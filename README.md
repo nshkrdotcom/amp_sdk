@@ -872,3 +872,16 @@ MIT -- see [LICENSE](LICENSE) for details.
 `/home/home/p/g/n/amp_sdk` now renders model arguments from payloads resolved by `/home/home/p/g/n/cli_subprocess_core`. The only authoritative model-policy path is `CliSubprocessCore.ModelRegistry.resolve/3`, `CliSubprocessCore.ModelRegistry.validate/2`, and `CliSubprocessCore.ModelRegistry.default_model/2`.
 
 Amp transport code remains responsible for formatting CLI arguments only. It does not implement provider fallback policy and must not emit nil/null/blank `--model` values.
+## Thread History And Resume Surfaces
+
+Amp remains thread-oriented, but the runtime layer now publishes that history through the same
+session-control vocabulary used elsewhere in the CLI stack.
+
+- `AmpSdk.Runtime.CLI.capabilities/0` includes `:session_history`, `:session_resume`,
+  `:session_pause`, and `:session_intervene`
+- `AmpSdk.Runtime.CLI.list_provider_sessions/1` projects `threads_list/1` entries into a common
+  history shape for orchestration layers
+
+This repo does **not** advertise a synthetic `system_prompt` surface through that runtime-neutral
+path. If a higher layer needs prompt intervention, it must use honest Amp thread controls rather
+than assume Claude/Gemini-style system prompt support exists here.

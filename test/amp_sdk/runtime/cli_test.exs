@@ -219,6 +219,44 @@ defmodule AmpSdk.Runtime.CLITest do
     end
   end
 
+  describe "session control surfaces" do
+    test "capabilities publish session control support" do
+      assert :session_history in CLI.capabilities()
+      assert :session_resume in CLI.capabilities()
+      assert :session_pause in CLI.capabilities()
+      assert :session_intervene in CLI.capabilities()
+    end
+
+    test "list_provider_sessions/1 returns standardized Amp thread entries" do
+      dir = TestSupport.tmp_dir!("amp_runtime_thread_entries")
+
+      script = """
+      #!/usr/bin/env bash
+      set -euo pipefail
+      printf '%s\n' \
+        'Title                                         Last Updated  Visibility  Messages  Thread ID' \
+        '────────────────────────────────────────────  ────────────  ──────────  ────────  ──────────────────────────────────────' \
+        'OTP refactor tracking                         2m ago        Workspace          4  T-01234567-89ab-cdef-0123-456789abcdef'
+      """
+
+      stub_path = TestSupport.write_executable!(dir, "amp_runtime_threads_stub", script)
+
+      try do
+        TestSupport.with_env(%{"AMP_CLI_PATH" => stub_path}, fn ->
+          assert {:ok, [entry]} = CLI.list_provider_sessions()
+          assert entry.id == "T-01234567-89ab-cdef-0123-456789abcdef"
+          assert entry.label == "OTP refactor tracking"
+          assert entry.updated_at == "2m ago"
+          assert entry.source_kind == :thread_history
+          assert entry.metadata.visibility == :workspace
+          assert entry.metadata.messages == 4
+        end)
+      after
+        File.rm_rf(dir)
+      end
+    end
+  end
+
   describe "project_event/2" do
     test "synthesizes a system message and projects assistant/tool/result events" do
       state = CLI.new_projection_state(%{invocation: %{cwd: "/tmp/demo"}})
