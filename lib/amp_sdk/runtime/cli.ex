@@ -13,10 +13,10 @@ defmodule AmpSdk.Runtime.CLI do
   alias CliSubprocessCore.Event, as: CoreEvent
   alias CliSubprocessCore.ExecutionSurface
   alias CliSubprocessCore.Payload
-  alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
   alias CliSubprocessCore.ProviderProfiles.Amp, as: CoreAmp
   alias CliSubprocessCore.Session
-  alias CliSubprocessCore.Transport.Error, as: CoreTransportError
+  alias ExternalRuntimeTransport.ProcessExit, as: CoreProcessExit
+  alias ExternalRuntimeTransport.Transport.Error, as: CoreTransportError
 
   @runtime_metadata %{lane: :amp_sdk}
   @default_session_event_tag :amp_sdk_runtime_cli

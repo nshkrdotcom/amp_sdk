@@ -7,12 +7,12 @@ defmodule AmpSdk.Command do
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.Command, as: CoreCommand
   alias CliSubprocessCore.Command.Error, as: CoreCommandError
+  alias CliSubprocessCore.Command.RunResult
   alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.ExecutionSurface
-  alias CliSubprocessCore.ProcessExit
   alias CliSubprocessCore.ProviderCLI
-  alias CliSubprocessCore.Transport.Error, as: CoreTransportError
-  alias CliSubprocessCore.Transport.RunResult
+  alias ExternalRuntimeTransport.ProcessExit
+  alias ExternalRuntimeTransport.Transport.Error, as: CoreTransportError
 
   @type run_opt ::
           {:timeout, non_neg_integer() | :infinity}
