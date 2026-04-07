@@ -7,12 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-04-06
+
+### Added
+
+- Session recovery coverage and refreshed example support for the shared
+  core-backed execution/runtime model.
+
 ### Changed
 
+- Amp discovery, command execution, and streaming now run through
+  `cli_subprocess_core`, with shared execution-surface routing and core-owned
+  model payload shaping.
 - Release docs and package-facing notes now describe the final Phase 4 boundary
   explicitly: `cli_subprocess_core` owns Amp subprocess lifecycle and
   `built-in transport`, while `amp_sdk` stays focused on Amp-specific invocation,
   projection, and management surfaces.
+- SSH and nonlocal execution flows now use the shared execution-surface
+  contract instead of Amp-local transport naming.
+
+### Fixed
+
+- Management command wrappers, timeout cleanup, and transport error
+  normalization were tightened to match current CLI behavior and reduce
+  orphaned subprocesses.
+- Headless transport cleanup, idle shutdown, and bounded stdout drain behavior
+  now behave deterministically under unattended execution.
 
 ## [0.4.0] - 2026-02-11
 
@@ -135,3 +155,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config option reading now uses `fetch_option/3` conflict detection and raises `%AmpSdk.Error{kind: :invalid_configuration}` on atom/string key conflicts.
 - Low-level transport errors can now be normalized with `AmpSdk.Transport.error_to_error/2`.
 - Timeout defaults are now centralized in the internal defaults module and reused by review/stream/transport paths.
+
+[Unreleased]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/nshkrdotcom/amp_sdk/releases/tag/v0.1.0
