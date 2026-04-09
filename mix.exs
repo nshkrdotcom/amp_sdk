@@ -191,8 +191,7 @@ defmodule AmpSdk.MixProject do
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       },
       maintainers: ["nshkrdotcom"],
-      files:
-        ~w(lib assets mix.exs README.md LICENSE CHANGELOG.md .formatter.exs)
+      files: ~w(lib assets mix.exs README.md LICENSE CHANGELOG.md .formatter.exs examples guides)
     ]
   end
 
