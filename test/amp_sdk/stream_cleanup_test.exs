@@ -99,6 +99,16 @@ defmodule AmpSdk.StreamCleanupTest do
         assert msg.error =~ "empty_input_messages"
 
         if File.exists?(pid_file) do
+          assert TestSupport.wait_until(
+                   fn ->
+                     case File.read(pid_file) do
+                       {:ok, contents} -> String.trim(contents) != ""
+                       {:error, _reason} -> false
+                     end
+                   end,
+                   1_000
+                 ) == :ok
+
           pid = pid_file |> File.read!() |> String.trim() |> String.to_integer()
           assert TestSupport.wait_until(fn -> not process_alive?(pid) end, 1_000) == :ok
         end
