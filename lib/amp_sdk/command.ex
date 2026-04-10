@@ -11,8 +11,8 @@ defmodule AmpSdk.Command do
   alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.ExecutionSurface
   alias CliSubprocessCore.ProviderCLI
-  alias ExternalRuntimeTransport.ProcessExit
-  alias ExternalRuntimeTransport.Transport.Error, as: CoreTransportError
+  alias ExecutionPlane.Process.Transport.Error, as: CoreTransportError
+  alias ExecutionPlane.ProcessExit
 
   @type run_opt ::
           {:timeout, non_neg_integer() | :infinity}

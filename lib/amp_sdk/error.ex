@@ -46,7 +46,7 @@ defmodule AmpSdk.Error do
           | {:exit_code, integer() | nil}
 
   alias CliSubprocessCore.ProviderCLI.ErrorRuntimeFailure
-  alias ExternalRuntimeTransport.Transport.Error, as: CoreTransportError
+  alias ExecutionPlane.Process.Transport.Error, as: CoreTransportError
 
   @spec new(kind(), String.t(), [normalize_opt()]) :: t()
   def new(kind, message, opts \\ []) when is_atom(kind) and is_binary(message) do

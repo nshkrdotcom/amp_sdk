@@ -7,8 +7,8 @@ defmodule AmpSdk.Runtime.CLITest do
   alias AmpSdk.Types.{Options, Permission}
   alias CliSubprocessCore.{Event, ExecutionSurface, Payload}
   alias CliSubprocessCore.TestSupport.FakeSSH
-  alias ExternalRuntimeTransport.ProcessExit
-  alias ExternalRuntimeTransport.Transport.Error, as: CoreTransportError
+  alias ExecutionPlane.Process.Transport.Error, as: CoreTransportError
+  alias ExecutionPlane.ProcessExit
 
   defp write_runtime_stub!(dir) do
     script = """
