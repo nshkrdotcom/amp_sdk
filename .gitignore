@@ -25,6 +25,17 @@ amp_sdk-*.tar
 # Dialyzer PLT files
 /priv/plts/
 
+# Nested example project artifacts
+examples/_output/
+examples/**/_build/
+examples/**/deps/
+examples/**/doc/
+examples/**/cover/
+examples/**/priv/plts/
+examples/**/*.beam
+examples/**/*.plt
+examples/**/*.plt.hash
+
 # Amp Python SDK reference (proprietary, not for distribution)
 /amp/
 

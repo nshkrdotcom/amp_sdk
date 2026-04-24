@@ -5,10 +5,8 @@ defmodule AmpSdk.Runtime.CLITest do
   alias AmpSdk.TestSupport
   alias AmpSdk.Types
   alias AmpSdk.Types.{Options, Permission}
-  alias CliSubprocessCore.{Event, ExecutionSurface, Payload}
+  alias CliSubprocessCore.{Event, ExecutionSurface, Payload, ProcessExit, TransportError}
   alias CliSubprocessCore.TestSupport.FakeSSH
-  alias ExecutionPlane.Process.Transport.Error, as: CoreTransportError
-  alias ExecutionPlane.ProcessExit
 
   defp write_runtime_stub!(dir) do
     script = """
@@ -383,7 +381,7 @@ defmodule AmpSdk.Runtime.CLITest do
         Event.new(:error,
           provider: :amp,
           provider_session_id: "amp-session-3",
-          raw: %{exit: %ProcessExit{status: :exit, code: 7, reason: {:exit_status, 7}}},
+          raw: %{exit: ProcessExit.from_reason({:exit_status, 7})},
           payload:
             Payload.Error.new(
               message: "CLI exited with code 7",
@@ -407,7 +405,11 @@ defmodule AmpSdk.Runtime.CLITest do
         Event.new(:error,
           provider: :amp,
           provider_session_id: "amp-session-transport-error",
-          raw: CoreTransportError.buffer_overflow(64, 16, "aaaaaaaa"),
+          raw:
+            TransportError.transport_error(
+              {:buffer_overflow, 64, 16},
+              %{actual_size: 64, max_size: 16, preview: "aaaaaaaa"}
+            ),
           payload:
             Payload.Error.new(
               message: "Transport buffer exceeded 16 bytes (got 64)",

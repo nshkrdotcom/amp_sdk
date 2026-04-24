@@ -13,10 +13,10 @@ defmodule AmpSdk.Runtime.CLI do
   alias CliSubprocessCore.Event, as: CoreEvent
   alias CliSubprocessCore.ExecutionSurface
   alias CliSubprocessCore.Payload
+  alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
   alias CliSubprocessCore.ProviderProfiles.Amp, as: CoreAmp
   alias CliSubprocessCore.Session
-  alias ExecutionPlane.Process.Transport.Error, as: CoreTransportError
-  alias ExecutionPlane.ProcessExit, as: CoreProcessExit
+  alias CliSubprocessCore.TransportError, as: CoreTransportError
 
   @runtime_metadata %{lane: :amp_sdk}
   @default_session_event_tag :amp_sdk_runtime_cli
@@ -774,12 +774,24 @@ defmodule AmpSdk.Runtime.CLI do
 
   defp integer_value(_value), do: nil
 
-  defp error_message!(
-         %Payload.Error{} = payload,
-         %{exit: %CoreProcessExit{} = exit},
-         session_id,
-         _state
-       ) do
+  defp error_message!(%Payload.Error{} = payload, raw, session_id, _state) do
+    cond do
+      is_map(raw) and CoreProcessExit.match?(Map.get(raw, :exit)) ->
+        transport_exit_error_message!(payload, raw, session_id)
+
+      payload.code == "parse_error" ->
+        parse_error_message!(payload, session_id)
+
+      CoreTransportError.match?(raw) ->
+        transport_error_message!(payload, raw, session_id)
+
+      true ->
+        generic_error_message!(payload, raw, session_id)
+    end
+  end
+
+  defp transport_exit_error_message!(%Payload.Error{} = payload, raw, session_id) do
+    exit = Map.fetch!(raw, :exit)
     kind = normalize_error_kind(payload.code) || :transport_exit
 
     error_result!(%{
@@ -792,18 +804,15 @@ defmodule AmpSdk.Runtime.CLI do
       "details" =>
         payload.metadata
         |> stringify_keys()
-        |> Map.put_new("reason", inspect(exit.reason))
-        |> Map.put_new("exit_code", exit.code),
-      "exit_code" => exit.code
+        |> Map.put_new("reason", inspect(CoreProcessExit.reason(exit)))
+        |> Map.put_new("exit_code", CoreProcessExit.code(exit)),
+      "exit_code" => CoreProcessExit.code(exit)
     })
   end
 
-  defp error_message!(
-         %Payload.Error{code: "parse_error", metadata: metadata} = payload,
-         _raw,
-         session_id,
-         _state
-       ) do
+  defp parse_error_message!(%Payload.Error{} = payload, session_id) do
+    metadata = payload.metadata
+
     error_result!(%{
       "type" => "result",
       "subtype" => "error_during_execution",
@@ -815,24 +824,19 @@ defmodule AmpSdk.Runtime.CLI do
     })
   end
 
-  defp error_message!(
-         %Payload.Error{} = payload,
-         %CoreTransportError{} = error,
-         session_id,
-         _state
-       ) do
+  defp transport_error_message!(%Payload.Error{} = payload, raw, session_id) do
     error_result!(%{
       "type" => "result",
       "subtype" => "error_during_execution",
       "session_id" => session_id,
       "is_error" => true,
-      "error" => "Transport error: #{payload.message || error.message}",
+      "error" => "Transport error: #{payload.message || CoreTransportError.message(raw)}",
       "kind" => :transport_error,
-      "details" => stringify_keys(error.context)
+      "details" => stringify_keys(CoreTransportError.context(raw))
     })
   end
 
-  defp error_message!(%Payload.Error{} = payload, raw, session_id, _state) do
+  defp generic_error_message!(%Payload.Error{} = payload, raw, session_id) do
     kind = normalize_error_kind(payload.code)
 
     error_result!(%{
@@ -884,17 +888,19 @@ defmodule AmpSdk.Runtime.CLI do
   defp normalize_error_kind(code) when is_atom(code), do: code
   defp normalize_error_kind(_code), do: nil
 
-  defp exit_message(%CoreProcessExit{status: :success, code: code}),
-    do: "CLI exited with code #{code || 0}"
+  defp exit_message(exit) do
+    code = CoreProcessExit.code(exit)
+    status = CoreProcessExit.status(exit)
+    signal = CoreProcessExit.signal(exit)
+    reason = CoreProcessExit.reason(exit)
 
-  defp exit_message(%CoreProcessExit{status: :exit, code: code}),
-    do: "CLI exited with code #{code}"
-
-  defp exit_message(%CoreProcessExit{status: :signal, signal: signal}),
-    do: "CLI terminated by signal #{inspect(signal)}"
-
-  defp exit_message(%CoreProcessExit{reason: reason}),
-    do: "CLI exited with #{inspect(reason)}"
+    cond do
+      status == :success -> "CLI exited with code #{code || 0}"
+      status == :exit -> "CLI exited with code #{code}"
+      status == :signal -> "CLI terminated by signal #{inspect(signal)}"
+      true -> "CLI exited with #{inspect(reason)}"
+    end
+  end
 
   defp system_message!(map), do: parse_projected_message!(map)
 

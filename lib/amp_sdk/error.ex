@@ -46,7 +46,7 @@ defmodule AmpSdk.Error do
           | {:exit_code, integer() | nil}
 
   alias CliSubprocessCore.ProviderCLI.ErrorRuntimeFailure
-  alias ExecutionPlane.Process.Transport.Error, as: CoreTransportError
+  alias CliSubprocessCore.TransportError, as: CoreTransportError
 
   @spec new(kind(), String.t(), [normalize_opt()]) :: t()
   def new(kind, message, opts \\ []) when is_atom(kind) and is_binary(message) do
@@ -95,15 +95,19 @@ defmodule AmpSdk.Error do
   end
 
   def normalize(reason, opts) when is_exception(reason) do
-    kind = Keyword.get(opts, :kind, :unknown)
-    message = Keyword.get(opts, :message, Exception.message(reason))
+    if CoreTransportError.match?(reason) do
+      normalize_transport_error(reason, opts)
+    else
+      kind = Keyword.get(opts, :kind, :unknown)
+      message = Keyword.get(opts, :message, Exception.message(reason))
 
-    new(kind, message,
-      cause: Keyword.get(opts, :cause, reason),
-      details: Keyword.get(opts, :details),
-      context: Keyword.get(opts, :context),
-      exit_code: Keyword.get(opts, :exit_code)
-    )
+      new(kind, message,
+        cause: Keyword.get(opts, :cause, reason),
+        details: Keyword.get(opts, :details),
+        context: Keyword.get(opts, :context),
+        exit_code: Keyword.get(opts, :exit_code)
+      )
+    end
   end
 
   def normalize(reason, opts) when is_binary(reason) do
@@ -130,30 +134,46 @@ defmodule AmpSdk.Error do
   end
 
   def normalize({:transport, reason} = tagged_reason, opts) do
-    kind = Keyword.get(opts, :kind, :transport_error)
-    message = Keyword.get(opts, :message, transport_reason_message(reason))
+    if CoreTransportError.match?(reason) do
+      normalize_transport_error(reason, opts)
+    else
+      kind = Keyword.get(opts, :kind, :transport_error)
+      message = Keyword.get(opts, :message, transport_reason_message(reason))
 
-    new(kind, message,
-      cause: Keyword.get(opts, :cause, tagged_reason),
-      details: Keyword.get(opts, :details),
-      context: Keyword.get(opts, :context),
-      exit_code: Keyword.get(opts, :exit_code)
-    )
+      new(kind, message,
+        cause: Keyword.get(opts, :cause, tagged_reason),
+        details: Keyword.get(opts, :details),
+        context: Keyword.get(opts, :context),
+        exit_code: Keyword.get(opts, :exit_code)
+      )
+    end
   end
 
-  def normalize(%CoreTransportError{} = error, opts) do
+  def normalize(reason, opts) do
+    if CoreTransportError.match?(reason) do
+      normalize_transport_error(reason, opts)
+    else
+      normalize_non_transport(reason, opts)
+    end
+  end
+
+  defp normalize_transport_error(error, opts) do
     kind = Keyword.get(opts, :kind, :transport_error)
-    message = Keyword.get(opts, :message, error.message)
+    message = Keyword.get(opts, :message, CoreTransportError.message(error))
 
     new(kind, message,
       cause: Keyword.get(opts, :cause, error),
       details: Keyword.get(opts, :details),
-      context: Map.merge(error.context, normalize_context(Keyword.get(opts, :context))),
+      context:
+        Map.merge(
+          CoreTransportError.context(error),
+          normalize_context(Keyword.get(opts, :context))
+        ),
       exit_code: Keyword.get(opts, :exit_code)
     )
   end
 
-  def normalize({:task_exit, reason} = tagged_reason, opts) do
+  defp normalize_non_transport({:task_exit, reason} = tagged_reason, opts) do
     kind = Keyword.get(opts, :kind, :task_exit)
     message = Keyword.get(opts, :message, "Task exited: #{inspect(reason)}")
 
@@ -165,7 +185,7 @@ defmodule AmpSdk.Error do
     )
   end
 
-  def normalize(reason, opts) do
+  defp normalize_non_transport(reason, opts) do
     kind = Keyword.get(opts, :kind, :unknown)
 
     new(kind, Keyword.get(opts, :message, inspect(reason)),
@@ -199,6 +219,12 @@ defmodule AmpSdk.Error do
   defp runtime_failure_kind(%ErrorRuntimeFailure{kind: :transport_error}), do: :transport_error
 
   defp transport_reason_message(:not_connected), do: "Transport not connected"
-  defp transport_reason_message(%CoreTransportError{} = error), do: error.message
-  defp transport_reason_message(reason), do: "Transport error: #{inspect(reason)}"
+
+  defp transport_reason_message(error) do
+    if CoreTransportError.match?(error) do
+      CoreTransportError.message(error)
+    else
+      "Transport error: #{inspect(error)}"
+    end
+  end
 end

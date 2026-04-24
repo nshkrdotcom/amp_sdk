@@ -10,9 +10,9 @@ defmodule AmpSdk.Command do
   alias CliSubprocessCore.Command.RunResult
   alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.ExecutionSurface
+  alias CliSubprocessCore.ProcessExit
   alias CliSubprocessCore.ProviderCLI
-  alias ExecutionPlane.Process.Transport.Error, as: CoreTransportError
-  alias ExecutionPlane.ProcessExit
+  alias CliSubprocessCore.TransportError, as: CoreTransportError
 
   @type run_opt ::
           {:timeout, non_neg_integer() | :infinity}
@@ -64,19 +64,22 @@ defmodule AmpSdk.Command do
   end
 
   defp handle_run_result(
-         %RunResult{exit: %ProcessExit{status: :success}} = result,
+         %RunResult{exit: exit} = result,
          trim_output,
          stderr_to_stdout,
-         _command,
-         _args,
-         _opts
+         command,
+         args,
+         opts
        ) do
-    {:ok, result |> command_output(stderr_to_stdout) |> maybe_trim(trim_output)}
+    if ProcessExit.successful?(exit) do
+      {:ok, result |> command_output(stderr_to_stdout) |> maybe_trim(trim_output)}
+    else
+      handle_failed_run_result(result, stderr_to_stdout, command, args, opts)
+    end
   end
 
-  defp handle_run_result(
-         %RunResult{exit: %ProcessExit{} = exit} = result,
-         _trim_output,
+  defp handle_failed_run_result(
+         %RunResult{exit: exit} = result,
          stderr_to_stdout,
          command,
          args,
@@ -98,7 +101,7 @@ defmodule AmpSdk.Command do
       case failure.kind do
         :process_exit ->
           Error.new(:command_failed, failure.message,
-            exit_code: exit.code,
+            exit_code: ProcessExit.code(exit),
             details: output,
             context: %{program: command.program, args: args}
           )
@@ -113,19 +116,27 @@ defmodule AmpSdk.Command do
   end
 
   defp translate_command_error(
-         %CoreCommandError{reason: {:transport, %CoreTransportError{reason: :timeout}}},
+         %CoreCommandError{reason: {:transport, error}} = command_error,
          timeout,
          command,
          args,
-         _opts
+         opts
        ) do
-    Error.new(:command_timeout, "Command timed out after #{timeout}ms",
-      exit_code: 124,
-      context: %{program: command.program, args: args}
-    )
+    if CoreTransportError.reason(error) == :timeout do
+      Error.new(:command_timeout, "Command timed out after #{timeout}ms",
+        exit_code: 124,
+        context: %{program: command.program, args: args}
+      )
+    else
+      translate_non_timeout_command_error(command_error, command, args, opts)
+    end
   end
 
   defp translate_command_error(%CoreCommandError{} = error, _timeout, command, args, opts) do
+    translate_non_timeout_command_error(error, command, args, opts)
+  end
+
+  defp translate_non_timeout_command_error(%CoreCommandError{} = error, command, args, opts) do
     reason = unwrap_command_error_reason(error)
 
     if provider_runtime_reason?(reason) do
@@ -173,17 +184,16 @@ defmodule AmpSdk.Command do
   defp command_output(%RunResult{} = result, true), do: result.output
   defp command_output(%RunResult{} = result, false), do: result.stdout <> result.stderr
 
-  defp unwrap_command_error_reason(%CoreCommandError{
-         reason: {:transport, %CoreTransportError{reason: reason}}
-       }),
-       do: reason
+  defp unwrap_command_error_reason(%CoreCommandError{reason: {:transport, error}}) do
+    if CoreTransportError.match?(error), do: CoreTransportError.reason(error), else: error
+  end
 
   defp unwrap_command_error_reason(%CoreCommandError{reason: reason}), do: reason
 
-  defp provider_runtime_reason?(%CoreTransportError{}), do: true
-  defp provider_runtime_reason?({:transport, %CoreTransportError{}}), do: true
-  defp provider_runtime_reason?(%ProcessExit{}), do: true
-  defp provider_runtime_reason?(_reason), do: false
+  defp provider_runtime_reason?({:transport, reason}), do: CoreTransportError.match?(reason)
+
+  defp provider_runtime_reason?(reason),
+    do: CoreTransportError.match?(reason) or ProcessExit.match?(reason)
 
   defp maybe_trim(output, true), do: String.trim(output)
   defp maybe_trim(output, _), do: output
