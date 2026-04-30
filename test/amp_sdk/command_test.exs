@@ -101,7 +101,11 @@ defmodule AmpSdk.CommandTest do
           "AMP_TEST_OUTPUT" => "done"
         },
         fn ->
-          assert {:ok, "done"} = Command.run(["threads", "list"])
+          assert {:ok, "done"} =
+                   Command.run(["threads", "list"],
+                     env: %{"AMP_TEST_ARGS_FILE" => args_file, "AMP_TEST_OUTPUT" => "done"}
+                   )
+
           assert File.read!(args_file) == "threads\nlist\n"
         end
       )
@@ -122,7 +126,11 @@ defmodule AmpSdk.CommandTest do
           "AMP_TEST_ERROR_TEXT" => "boom"
         },
         fn ->
-          assert {:error, %Error{} = error} = Command.run(["threads", "list"])
+          assert {:error, %Error{} = error} =
+                   Command.run(["threads", "list"],
+                     env: %{"AMP_TEST_EXIT_CODE" => "7", "AMP_TEST_ERROR_TEXT" => "boom"}
+                   )
+
           assert error.kind == :command_failed
           assert error.exit_code == 7
           assert error.details =~ "boom"
@@ -144,7 +152,12 @@ defmodule AmpSdk.CommandTest do
           "AMP_TEST_BLOCK_FOREVER" => "1"
         },
         fn ->
-          assert {:error, %Error{} = error} = Command.run(["threads", "list"], timeout: 10)
+          assert {:error, %Error{} = error} =
+                   Command.run(["threads", "list"],
+                     timeout: 10,
+                     env: %{"AMP_TEST_BLOCK_FOREVER" => "1"}
+                   )
+
           assert error.kind == :command_timeout
           assert error.exit_code == 124
           assert error.message =~ "timed out"
@@ -169,7 +182,10 @@ defmodule AmpSdk.CommandTest do
         },
         fn ->
           assert {:error, %Error{kind: :command_timeout}} =
-                   Command.run(["threads", "list"], timeout: 30)
+                   Command.run(["threads", "list"],
+                     timeout: 30,
+                     env: %{"AMP_TEST_BLOCK_FOREVER" => "1", "AMP_TEST_PID_FILE" => pid_file}
+                   )
 
           assert TestSupport.wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
 
@@ -202,7 +218,10 @@ defmodule AmpSdk.CommandTest do
           flush_exec_messages()
 
           assert {:error, %Error{kind: :command_timeout}} =
-                   Command.run(["threads", "list"], timeout: 20)
+                   Command.run(["threads", "list"],
+                     timeout: 20,
+                     env: %{"AMP_TEST_PID_FILE" => pid_file}
+                   )
 
           assert TestSupport.wait_until(fn -> File.exists?(pid_file) end, 500) == :ok
 
@@ -265,7 +284,11 @@ defmodule AmpSdk.CommandTest do
           "AMP_TEST_ARGS_FILE" => args_file
         },
         fn ->
-          assert {:ok, "node-ok"} = Command.run(["threads", "list"])
+          assert {:ok, "node-ok"} =
+                   Command.run(["threads", "list"],
+                     env: %{"PATH" => path, "AMP_TEST_ARGS_FILE" => args_file}
+                   )
+
           assert File.read!(args_file) == "#{js_path}\nthreads\nlist\n"
         end
       )

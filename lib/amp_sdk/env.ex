@@ -93,6 +93,6 @@ defmodule AmpSdk.Env do
   end
 
   defp allowed_system_key?(key) do
-    key in @base_env_keys or String.starts_with?(key, "AMP_")
+    key in @base_env_keys or String.starts_with?(key, "AMP_TEST_")
   end
 end

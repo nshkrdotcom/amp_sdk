@@ -10,21 +10,31 @@ defmodule AmpSdk.EnvTest do
     assert env["AMP_SDK_VERSION"] == "elixir-" <> to_string(Application.spec(:amp_sdk, :vsn))
   end
 
-  test "Command and Stream share the same baseline env filtering" do
+  test "Command and Stream do not inherit provider AMP_* variables implicitly" do
     TestSupport.with_env(
       %{
         "AMP_VALID_ALPHA" => "one",
+        "AMP_TEST_VALID_ALPHA" => "test-control",
         "AMP.INVALID.KEY" => "two",
         "NOT_AMP_KEY" => "three"
       },
       fn ->
         stream_env = AmpSdk.Stream.build_env(%Options{})
 
-        assert stream_env["AMP_VALID_ALPHA"] == "one"
+        refute Map.has_key?(stream_env, "AMP_VALID_ALPHA")
+        assert stream_env["AMP_TEST_VALID_ALPHA"] == "test-control"
         refute Map.has_key?(stream_env, "AMP.INVALID.KEY")
         refute Map.has_key?(stream_env, "NOT_AMP_KEY")
 
-        # Command path should use the same filter logic and preserve valid AMP_* overrides.
+        explicit_stream_env =
+          AmpSdk.Env.build_cli_env(%{}, base_env: AmpSdk.Env.filtered_system_env())
+
+        refute Map.has_key?(explicit_stream_env, "AMP_VALID_ALPHA")
+        assert explicit_stream_env["AMP_TEST_VALID_ALPHA"] == "test-control"
+        refute Map.has_key?(explicit_stream_env, "AMP.INVALID.KEY")
+        refute Map.has_key?(explicit_stream_env, "NOT_AMP_KEY")
+
+        # Command path should preserve only explicit env overrides supplied by the caller.
         dir = TestSupport.tmp_dir!("amp_env_parity")
         args_file = Path.join(dir, "args.txt")
 
@@ -39,7 +49,11 @@ defmodule AmpSdk.EnvTest do
           TestSupport.with_env(
             %{"AMP_CLI_PATH" => amp_path, "AMP_TEST_ARGS_FILE" => args_file},
             fn ->
-              assert {:ok, "one"} = AmpSdk.Command.run(["threads", "list"])
+              assert {:ok, "one"} =
+                       AmpSdk.Command.run(["threads", "list"],
+                         env: %{"AMP_VALID_ALPHA" => "one", "AMP_TEST_ARGS_FILE" => args_file}
+                       )
+
               assert File.read!(args_file) == "threads\nlist\n"
             end
           )
@@ -68,7 +82,10 @@ defmodule AmpSdk.EnvTest do
           "AMP_VALID_ALPHA" => "allowed"
         },
         fn ->
-          assert {:ok, output} = AmpSdk.Command.run(["threads", "list"])
+          assert {:ok, output} =
+                   AmpSdk.Command.run(["threads", "list"],
+                     env: %{"AMP_VALID_ALPHA" => "allowed"}
+                   )
 
           [sdk_version, not_amp, amp_value] = String.split(output, "|", parts: 3)
 

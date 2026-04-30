@@ -141,14 +141,13 @@ AmpSdk.run("List files", %Options{mcp_config: mcp})
 | `AMP_CLI_PATH` | Override CLI binary path |
 | `AMP_API_KEY` | Amp authentication key |
 | `AMP_URL` | Override Amp service endpoint (default: `https://ampcode.com/`) |
-| `AMP_TOOLBOX` | Path to toolbox scripts |
+| `AMP_TOOLBOX` | Path to toolbox scripts; prefer `Options.toolbox` for per-run control |
 | `AMP_SDK_VERSION` | SDK identifier (auto-set to `elixir-<current package version>`) |
 | `AMP_LOG_LEVEL` | Log level (alternative to `--log-level` flag) |
 | `AMP_LOG_FILE` | Log file path (alternative to `--log-file` flag) |
 | `AMP_SETTINGS_FILE` | Settings file path (alternative to `--settings-file` flag) |
 
-All `AMP_`-prefixed environment variables are automatically forwarded to the CLI subprocess.
-`AmpSdk.run/2` and `AmpSdk.execute/2` now share the same environment construction path, including automatic `AMP_SDK_VERSION` injection.
+`AmpSdk.run/2` and `AmpSdk.execute/2` share the same environment construction path: a small base system allowlist (`PATH`, `HOME`, etc.), `AMP_TEST_*` harness keys, explicit per-run overrides, and automatic `AMP_SDK_VERSION` injection. Provider behavior keys such as `AMP_API_KEY`, `AMP_URL`, `AMP_LOG_LEVEL`, `AMP_LOG_FILE`, and `AMP_SETTINGS_FILE` are not ambiently forwarded by the runtime path. Pass provider behavior environment explicitly through `Options.env` or the typed option when applicable.
 
 Additional env vars per execution:
 

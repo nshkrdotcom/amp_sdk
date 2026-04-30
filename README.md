@@ -696,10 +696,10 @@ retained-stderr capture, and execution-surface routing are defined in
 | `AMP_CLI_PATH` | Override CLI binary path |
 | `AMP_API_KEY` | Amp authentication key |
 | `AMP_URL` | Override Amp service endpoint (default: `https://ampcode.com/`) |
-| `AMP_TOOLBOX` | Path to toolbox scripts (also settable via `Options.toolbox`) |
+| `AMP_TOOLBOX` | Path to toolbox scripts; pass through `Options.toolbox` for per-run control |
 | `AMP_SDK_VERSION` | SDK identifier sent to CLI (auto-set to `elixir-<current package version>`) |
 
-`AmpSdk.run/2` and `AmpSdk.execute/2` use the same CLI env builder: base system keys (`PATH`, `HOME`, etc.), `AMP_*` keys, `Options.env` overrides, and automatic `AMP_SDK_VERSION` tagging.
+`AmpSdk.run/2` and `AmpSdk.execute/2` use the same CLI env builder: a small base system allowlist (`PATH`, `HOME`, etc.), `AMP_TEST_*` harness keys, explicit `Options.env` overrides, and automatic `AMP_SDK_VERSION` tagging. Provider behavior keys such as `AMP_API_KEY`, `AMP_URL`, and `AMP_TOOLBOX` are not ambiently inherited by the runtime path; pass them explicitly through `Options.env` or the typed option when applicable.
 
 Additional env vars can be passed per-execution via `Options.env`:
 
