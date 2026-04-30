@@ -3,7 +3,7 @@
 # SDK-direct Amp promotion-path verifier.
 #
 # Usage:
-#   mix run examples/promotion_path/sdk_direct_amp.exs -- \
+#   mix run examples/promotion_path/sdk_direct_amp.exs \
 #     --prompt "Reply with exactly: amp sdk direct ok"
 #
 # Optional:
@@ -61,4 +61,3 @@ defmodule AmpPromotionPath.Direct do
 end
 
 AmpPromotionPath.Direct.main(System.argv())
-

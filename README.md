@@ -636,7 +636,7 @@ importing ASM, passes keyword `execution_surface` input, and demonstrates
 Amp-native permission settings and UI suppression flags as SDK-owned behavior:
 
 ```bash
-mix run examples/promotion_path/sdk_direct_amp.exs -- \
+mix run examples/promotion_path/sdk_direct_amp.exs \
   --prompt "Reply with exactly: amp sdk direct ok"
 ```
 
