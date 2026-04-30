@@ -1,0 +1,13 @@
+# Amp Provider Behavior Manifest
+
+Provider-native Amp behavior must be proven here before this SDK translates it.
+This manifest is SDK-owned evidence; it is not proof that ASM can expose the
+feature as common behavior across providers.
+
+| Feature | Evidence type | CLI version/source revision | Fixture | Live smoke | Known unsupported semantics | Date verified |
+| --- | --- | --- | --- | --- | --- | --- |
+| Amp streaming argument rendering for mode, visibility, thread continuation, thinking, labels, MCP config, and UI suppression flags | source inspection note and SDK render tests | current Amp CLI contract as represented by SDK options | `test/amp_sdk/runtime_cli_render_test.exs`; `test/amp_sdk/stream_test.exs` | `examples/promotion_path/sdk_direct_amp.exs` | Amp-native CLI flags; ASM must not accept these as generic provider options without all-four proof | 2026-04-29 |
+| Amp settings payload for permissions and skills | source inspection note and SDK settings tests | current Amp CLI settings-file contract | `test/amp_sdk/runtime_cli_render_test.exs`; `test/amp_sdk/stream_test.exs`; `guides/permissions.md` | `examples/promotion_path/sdk_direct_amp.exs` | Amp-native permissions/skills only; does not establish common ASM host-tool, approval, skill, or no-tool semantics | 2026-04-29 |
+| Amp thread, task, skill, permission, MCP, review, and usage management commands | source inspection note and SDK management tests | current Amp CLI contract | `test/amp_sdk/missing_features_test.exs`; `test/amp_sdk/env_test.exs`; management module tests | Existing management examples | Provider-native management surfaces; ASM must not normalize these without all-four proof | 2026-04-29 |
+| Shared `execution_surface` normalization for local and SSH placement | source inspection note and SDK runtime tests | current `cli_subprocess_core` dependency | `test/amp_sdk/runtime/cli_test.exs`; `test/amp_sdk/runtime_cli_render_test.exs` | `examples/promotion_path/sdk_direct_amp.exs` for local keyword input; live SSH tests remain opt-in | Placement only; execution surface metadata must not become provider-native Amp configuration | 2026-04-29 |
+

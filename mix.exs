@@ -92,6 +92,7 @@ defmodule AmpSdk.MixProject do
         {"guides/error-handling.md", title: "Error Handling"},
         {"guides/testing.md", title: "Testing"},
         {"guides/tools-and-management.md", title: "Tools And Management"},
+        {"guides/provider_behavior_manifest.md", title: "Provider Behavior Manifest"},
         {"examples/README.md", title: "Examples", filename: "examples"},
         {"CHANGELOG.md", title: "Changelog"},
         {"LICENSE", title: "License"}
@@ -110,7 +111,8 @@ defmodule AmpSdk.MixProject do
         ],
         Quality: [
           "guides/error-handling.md",
-          "guides/testing.md"
+          "guides/testing.md",
+          "guides/provider_behavior_manifest.md"
         ],
         Examples: ["examples/README.md"],
         Reference: ["CHANGELOG.md", "LICENSE"]

@@ -179,6 +179,49 @@ defmodule AmpSdk.Runtime.CLI do
     |> Enum.uniq()
   end
 
+  @doc false
+  @spec render_for_test(keyword()) :: {:ok, map()} | {:error, term()}
+  def render_for_test(opts) when is_list(opts) do
+    input_mode = Keyword.get(opts, :input_mode, :prompt)
+
+    options =
+      opts
+      |> Keyword.get(:options, %Options{})
+      |> maybe_override_execution_surface(Keyword.get(opts, :execution_surface))
+      |> Options.validate!()
+
+    with {:ok, args} <- build_invocation_args(options, input_mode, opts),
+         {:ok, settings_payload} <- build_settings_payload(options) do
+      {:ok,
+       %{
+         provider: :amp,
+         args: maybe_add_settings(args, Keyword.get(opts, :settings_path)),
+         cwd: default_cwd(options.cwd, options.execution_surface),
+         env: build_env(options),
+         execution_surface: options.execution_surface,
+         settings_payload: settings_payload,
+         provider_native: %{
+           mode: options.mode,
+           dangerously_allow_all: options.dangerously_allow_all,
+           visibility: options.visibility,
+           continue_thread: options.continue_thread,
+           mcp_config: options.mcp_config,
+           labels: options.labels,
+           permissions: options.permissions,
+           skills: options.skills,
+           thinking: options.thinking,
+           no_ide: options.no_ide,
+           no_notifications: options.no_notifications,
+           no_color: options.no_color,
+           no_jetbrains: options.no_jetbrains
+         }
+       }}
+    end
+  rescue
+    error in [ArgumentError] ->
+      {:error, error}
+  end
+
   @spec list_provider_sessions(keyword()) :: {:ok, [map()]} | {:error, term()}
   def list_provider_sessions(opts \\ []) when is_list(opts) do
     with {:ok, sessions} <- AmpSdk.threads_list(opts) do
@@ -492,6 +535,14 @@ defmodule AmpSdk.Runtime.CLI do
   end
 
   def build_settings_file(%Options{} = options) do
+    with {:ok, merged} <- build_settings_payload(options) do
+      write_settings_file(merged)
+    end
+  end
+
+  @doc false
+  @spec build_settings_payload(Options.t()) :: {:ok, map()} | {:error, Error.t()}
+  def build_settings_payload(%Options{} = options) do
     with {:ok, merged} <- read_base_settings(options.settings_file) do
       merged =
         if options.permissions do
@@ -508,7 +559,7 @@ defmodule AmpSdk.Runtime.CLI do
           merged
         end
 
-      write_settings_file(merged)
+      {:ok, merged}
     end
   end
 
@@ -626,6 +677,12 @@ defmodule AmpSdk.Runtime.CLI do
       no_jetbrains: Keyword.get(opts, :no_jetbrains, false)
     }
     |> Options.validate!()
+  end
+
+  defp maybe_override_execution_surface(%Options{} = options, nil), do: options
+
+  defp maybe_override_execution_surface(%Options{} = options, execution_surface) do
+    %{options | execution_surface: execution_surface}
   end
 
   defp maybe_emit_system_message(%CoreEvent{} = event, %ProjectionState{} = state) do

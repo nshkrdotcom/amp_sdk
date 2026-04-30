@@ -22,6 +22,8 @@ An idiomatic Elixir SDK for [Amp](https://ampcode.com) (by Sourcegraph) -- the a
 - `guides/streaming.md` - event flow and result handling
 - `guides/threads.md` - thread lifecycle and continuation
 - `guides/testing.md` - local validation workflow
+- `guides/provider_behavior_manifest.md` - evidence for Amp-native feature
+  translation
 
 ---
 
@@ -628,6 +630,21 @@ runtime availability in `ASM.Extensions.ProviderSDK.capability_report/0` but
 keeps `namespaces: []` because Amp currently composes through the common ASM
 surface only.
 
+SDK-direct live verification lives in
+`examples/promotion_path/sdk_direct_amp.exs`. It uses the Amp SDK API without
+importing ASM, passes keyword `execution_surface` input, and demonstrates
+Amp-native permission settings and UI suppression flags as SDK-owned behavior:
+
+```bash
+mix run examples/promotion_path/sdk_direct_amp.exs -- \
+  --prompt "Reply with exactly: amp sdk direct ok"
+```
+
+Provider-native feature evidence is tracked in
+`guides/provider_behavior_manifest.md`. Add or update that manifest before
+translating any new Amp-specific setting, permission, MCP, task, skill, review,
+thread, or management behavior.
+
 ---
 
 ## Error Handling
@@ -826,6 +843,7 @@ Full API documentation is available on [HexDocs](https://hexdocs.pm/amp_sdk).
 - [Threads](guides/threads.md) — multi-turn conversations and thread management
 - [Error Handling](guides/error-handling.md) — error kinds and recovery
 - [Testing](guides/testing.md) — unit and integration testing strategies
+- [Provider Behavior Manifest](guides/provider_behavior_manifest.md) — evidence for Amp-native feature translation
 
 ### Examples
 
