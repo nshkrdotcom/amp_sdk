@@ -7,11 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added governed Amp launch support through an explicit authority object for
+  command, session, and non-auth management command execution.
+- Added governed launch tests proving authority-only command/cwd/env use and
+  fail-closed rejection of native config, permissions, MCP OAuth, and env
+  smuggling.
+
 ### Changed
 
 - Error kind normalization, thread table parsing, env key validation, permission
   list parsing, and MCP list parsing now use bounded literal handling and
   deterministic scanners.
+- Amp CLI native login, `AMP_*` env keys, settings files, permissions config,
+  and MCP OAuth state remain standalone direct-use behavior only. Governed mode
+  requires authority materialization and rejects unmanaged env, native config,
+  and OAuth credential options.
 
 ### Fixed
 

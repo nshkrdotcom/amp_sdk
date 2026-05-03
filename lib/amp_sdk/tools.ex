@@ -26,7 +26,7 @@ defmodule AmpSdk.Tools do
 
     run_opts =
       opts
-      |> Keyword.take([:timeout, :execution_surface])
+      |> Keyword.take([:timeout, :execution_surface, :governed_authority])
       |> Util.maybe_put_kw(:stdin, Keyword.get(opts, :input))
 
     CLIInvoke.invoke(args, run_opts)

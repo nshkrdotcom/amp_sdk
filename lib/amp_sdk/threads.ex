@@ -79,7 +79,7 @@ defmodule AmpSdk.Threads do
 
     run_opts =
       opts
-      |> Keyword.take([:timeout, :stdin, :execution_surface])
+      |> Keyword.take([:timeout, :stdin, :execution_surface, :governed_authority])
       |> Util.maybe_put_kw(:stdin, Keyword.get(opts, :input))
 
     CLIInvoke.invoke(args, run_opts)

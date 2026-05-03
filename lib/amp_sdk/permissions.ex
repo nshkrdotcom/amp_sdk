@@ -1,7 +1,7 @@
 defmodule AmpSdk.Permissions do
   @moduledoc "Permission management via the Amp CLI."
 
-  alias AmpSdk.{CLIInvoke, Error}
+  alias AmpSdk.{CLIInvoke, Error, GovernedLaunch}
   alias AmpSdk.Types.PermissionRule
 
   @spec list(keyword()) :: {:ok, [PermissionRule.t()]} | {:error, Error.t()}
@@ -12,7 +12,8 @@ defmodule AmpSdk.Permissions do
       |> maybe_append_flag(opts[:workspace], "--workspace")
       |> Kernel.++(["--json"])
 
-    with {:ok, output} <- CLIInvoke.invoke(args, opts),
+    with :ok <- GovernedLaunch.validate_native_state(opts, :permissions),
+         {:ok, output} <- CLIInvoke.invoke(args, opts),
          {:ok, decoded} <- decode_json_list(output, "permissions"),
          {:ok, rules} <- parse_rules(decoded) do
       {:ok, rules}
@@ -30,17 +31,21 @@ defmodule AmpSdk.Permissions do
         {key, value}, acc -> acc ++ ["--#{key}", to_string(value)]
       end)
 
-    CLIInvoke.invoke(args, opts)
+    with :ok <- GovernedLaunch.validate_native_state(opts, :permissions) do
+      CLIInvoke.invoke(args, opts)
+    end
   end
 
   @spec add(String.t(), String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
   def add(tool, action, opts \\ []) when is_binary(tool) and is_binary(action) do
-    args = ["permissions", "add", action, tool]
-    args = if opts[:context], do: args ++ ["--context", to_string(opts[:context])], else: args
-    args = if opts[:to], do: args ++ ["--to", to_string(opts[:to])], else: args
-    args = if opts[:workspace], do: args ++ ["--workspace"], else: args
+    with :ok <- GovernedLaunch.validate_native_state(opts, :permissions) do
+      args = ["permissions", "add", action, tool]
+      args = if opts[:context], do: args ++ ["--context", to_string(opts[:context])], else: args
+      args = if opts[:to], do: args ++ ["--to", to_string(opts[:to])], else: args
+      args = if opts[:workspace], do: args ++ ["--workspace"], else: args
 
-    CLIInvoke.invoke(args, opts)
+      CLIInvoke.invoke(args, opts)
+    end
   end
 
   defp decode_json_list(output, label) do

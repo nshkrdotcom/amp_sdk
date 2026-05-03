@@ -70,6 +70,10 @@ When permissions are provided, the SDK:
 
 If you also provide a `settings_file` in Options, the SDK merges your permissions into that file's contents.
 
+Permissions, skills, and settings files are native Amp configuration for
+standalone direct use. Governed execution rejects these settings inputs unless
+they have already been represented by the selected authority.
+
 ## Read-Only Mode Recipe
 
 ```elixir

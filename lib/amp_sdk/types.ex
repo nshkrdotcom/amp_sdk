@@ -1197,8 +1197,16 @@ defmodule AmpSdk.Types do
   end
 
   defmodule Options do
-    @moduledoc "Configuration options for an Amp CLI session."
+    @moduledoc """
+    Configuration options for an Amp CLI session.
+
+    `governed_authority` selects authority-materialized launch. In that mode,
+    command, cwd, env, credential lease, target, command reference, and
+    redaction reference must come from the authority; standalone env, settings,
+    permissions, MCP, OAuth, and execution-surface overrides are rejected.
+    """
     @stream_timeout_ms AmpSdk.Defaults.stream_timeout_ms()
+    alias AmpSdk.GovernedLaunch
     alias CliSubprocessCore.{ExecutionSurface, ModelInput}
 
     @type t :: %__MODULE__{
@@ -1219,6 +1227,7 @@ defmodule AmpSdk.Types do
             thinking: boolean(),
             model_payload: CliSubprocessCore.ModelRegistry.selection() | map() | nil,
             execution_surface: ExecutionSurface.t() | map() | keyword() | nil,
+            governed_authority: CliSubprocessCore.GovernedAuthority.t() | map() | keyword() | nil,
             stream_timeout_ms: pos_integer(),
             max_stderr_buffer_bytes: pos_integer(),
             no_ide: boolean(),
@@ -1243,6 +1252,7 @@ defmodule AmpSdk.Types do
               thinking: false,
               model_payload: nil,
               execution_surface: nil,
+              governed_authority: nil,
               stream_timeout_ms: @stream_timeout_ms,
               max_stderr_buffer_bytes: AmpSdk.Defaults.stream_max_stderr_buffer_bytes(),
               no_ide: false,
@@ -1255,8 +1265,10 @@ defmodule AmpSdk.Types do
       options
       |> validate_positive_integer!(:stream_timeout_ms)
       |> validate_positive_integer!(:max_stderr_buffer_bytes)
+      |> GovernedLaunch.validate_options!()
       |> normalize_model_payload!()
       |> normalize_execution_surface!()
+      |> GovernedLaunch.validate_options!()
     end
 
     @doc false

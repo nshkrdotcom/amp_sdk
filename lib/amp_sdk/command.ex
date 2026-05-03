@@ -3,7 +3,7 @@ defmodule AmpSdk.Command do
   Synchronous Amp command helpers built on the shared core command lane.
   """
 
-  alias AmpSdk.{CLI, Defaults, Env, Error}
+  alias AmpSdk.{CLI, Defaults, Env, Error, GovernedLaunch}
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.Command, as: CoreCommand
   alias CliSubprocessCore.Command.Error, as: CoreCommandError
@@ -22,30 +22,34 @@ defmodule AmpSdk.Command do
           | {:cd, String.t()}
           | {:env, map() | keyword()}
           | {:execution_surface, ExecutionSurface.t() | map() | keyword()}
+          | {:governed_authority, CliSubprocessCore.GovernedAuthority.t() | map() | keyword()}
 
   @spec run([String.t()], [run_opt()]) :: {:ok, String.t()} | {:error, Error.t()}
   def run(args, opts \\ []) when is_list(args) and is_list(opts) do
-    with {:ok, command} <- CLI.resolve(Keyword.get(opts, :execution_surface)) do
-      run(command, args, opts)
+    with {:ok, authority} <- GovernedLaunch.authority(opts) do
+      run_with_authority(authority, args, opts)
+    else
+      {:error, reason} -> {:error, GovernedLaunch.error(reason)}
     end
   end
 
   @spec run(CommandSpec.t(), [String.t()], [run_opt()]) :: {:ok, String.t()} | {:error, Error.t()}
   def run(%CommandSpec{} = command, args, opts) when is_list(args) and is_list(opts) do
-    timeout = Keyword.get(opts, :timeout, Defaults.command_timeout_ms())
-    stderr_to_stdout = Keyword.get(opts, :stderr_to_stdout, true)
-    trim_output = Keyword.get(opts, :trim_output, true)
-    command_args = CLI.command_args(command, args)
+    with :ok <- reject_governed_command_spec(opts),
+         {:ok, core_run_opts} <- build_core_run_opts(opts, opts_stderr_to_stdout(opts)) do
+      timeout = Keyword.get(opts, :timeout, Defaults.command_timeout_ms())
+      stderr_to_stdout = opts_stderr_to_stdout(opts)
+      trim_output = Keyword.get(opts, :trim_output, true)
+      command_args = CLI.command_args(command, args)
 
-    invocation =
-      CoreCommand.new(
-        command.program,
-        command_args,
-        cwd: Keyword.get(opts, :cd),
-        env: Env.build_cli_env(normalize_env(Keyword.get(opts, :env)))
-      )
+      invocation =
+        CoreCommand.new(
+          command.program,
+          command_args,
+          cwd: Keyword.get(opts, :cd),
+          env: Env.build_cli_env(normalize_env(Keyword.get(opts, :env)))
+        )
 
-    with {:ok, core_run_opts} <- build_core_run_opts(opts, timeout, stderr_to_stdout) do
       case CoreCommand.run(invocation, core_run_opts) do
         {:ok, %RunResult{} = result} ->
           handle_run_result(
@@ -60,6 +64,59 @@ defmodule AmpSdk.Command do
         {:error, %CoreCommandError{} = error} ->
           {:error, translate_command_error(error, timeout, command, command_args, opts)}
       end
+    end
+  end
+
+  defp run_with_authority(nil, args, opts) do
+    case CLI.resolve(Keyword.get(opts, :execution_surface)) do
+      {:ok, command} -> run(command, args, opts)
+      {:error, %Error{} = error} -> {:error, error}
+    end
+  end
+
+  defp run_with_authority(authority, args, opts), do: run_governed(authority, args, opts)
+
+  defp run_governed(authority, args, opts) do
+    case GovernedLaunch.validate_command_options(opts) do
+      :ok ->
+        timeout = Keyword.get(opts, :timeout, Defaults.command_timeout_ms())
+        stderr_to_stdout = Keyword.get(opts, :stderr_to_stdout, true)
+        trim_output = Keyword.get(opts, :trim_output, true)
+        command = CliSubprocessCore.GovernedAuthority.command_spec(authority)
+        command_args = CLI.command_args(command, args)
+
+        invocation =
+          CoreCommand.new(
+            command,
+            args,
+            CliSubprocessCore.GovernedAuthority.launch_options(authority)
+          )
+
+        run_opts =
+          [
+            stdin: Keyword.get(opts, :stdin),
+            timeout: timeout,
+            stderr: stderr_mode(stderr_to_stdout)
+          ]
+          |> GovernedLaunch.run_options(opts)
+
+        case CoreCommand.run(invocation, run_opts) do
+          {:ok, %RunResult{} = result} ->
+            handle_run_result(
+              result,
+              trim_output,
+              stderr_to_stdout,
+              command,
+              command_args,
+              opts
+            )
+
+          {:error, %CoreCommandError{} = error} ->
+            {:error, translate_command_error(error, timeout, command, command_args, opts)}
+        end
+
+      {:error, reason} ->
+        {:error, GovernedLaunch.error(reason)}
     end
   end
 
@@ -165,7 +222,11 @@ defmodule AmpSdk.Command do
   defp stderr_mode(true), do: :stdout
   defp stderr_mode(false), do: :separate
 
-  defp build_core_run_opts(opts, timeout, stderr_to_stdout) do
+  defp opts_stderr_to_stdout(opts), do: Keyword.get(opts, :stderr_to_stdout, true)
+
+  defp build_core_run_opts(opts, stderr_to_stdout) do
+    timeout = Keyword.get(opts, :timeout, Defaults.command_timeout_ms())
+
     base_opts = [
       stdin: Keyword.get(opts, :stdin),
       timeout: timeout,
@@ -213,6 +274,19 @@ defmodule AmpSdk.Command do
            "invalid execution_surface: #{inspect(reason)}",
            cause: reason
          )}
+    end
+  end
+
+  defp reject_governed_command_spec(opts) do
+    case GovernedLaunch.authority(opts) do
+      {:ok, nil} ->
+        :ok
+
+      {:ok, _authority} ->
+        {:error, GovernedLaunch.error({:governed_launch_smuggling, :command_spec})}
+
+      {:error, reason} ->
+        {:error, GovernedLaunch.error(reason)}
     end
   end
 end

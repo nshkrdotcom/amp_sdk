@@ -7,7 +7,7 @@ defmodule AmpSdk.Runtime.CLI do
   treating the underlying session tag as core identity.
   """
 
-  alias AmpSdk.{CLI, Env, Error, ErrorKind, Types, Util}
+  alias AmpSdk.{CLI, Env, Error, ErrorKind, GovernedLaunch, Types, Util}
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.Event, as: CoreEvent
@@ -104,7 +104,7 @@ defmodule AmpSdk.Runtime.CLI do
     options = opts |> Keyword.get(:options, %Options{}) |> Options.validate!()
     input_mode = input_mode(input)
 
-    with {:ok, %CommandSpec{} = command_spec} <- CLI.resolve(options.execution_surface),
+    with {:ok, command_spec} <- command_spec_for_options(options),
          {:ok, settings_path, temp_dir} <- build_settings_file(options) do
       session_opts =
         build_session_options(
@@ -196,7 +196,7 @@ defmodule AmpSdk.Runtime.CLI do
        %{
          provider: :amp,
          args: maybe_add_settings(args, Keyword.get(opts, :settings_path)),
-         cwd: default_cwd(options.cwd, options.execution_surface),
+         cwd: render_cwd(options),
          env: build_env(options),
          execution_surface: options.execution_surface,
          settings_payload: settings_payload,
@@ -487,27 +487,15 @@ defmodule AmpSdk.Runtime.CLI do
   def build_invocation(opts) when is_list(opts) do
     input_mode = Keyword.get(opts, :input_mode, :prompt)
 
-    case Keyword.get(opts, :command_spec) do
-      %CommandSpec{} = command_spec when input_mode in [:prompt, :json_input] ->
-        options = options_from_provider_opts(opts)
-
-        with {:ok, args} <- build_invocation_args(options, input_mode, opts) do
-          args = maybe_add_settings(args, Keyword.get(opts, :settings_path))
-
-          {:ok,
-           CliSubprocessCore.Command.new(
-             command_spec.program,
-             CLI.command_args(command_spec, args),
-             cwd: default_cwd(Keyword.get(opts, :cwd), Keyword.get(opts, :execution_surface)),
-             env: Keyword.get(opts, :env, %{})
-           )}
-        end
-
-      %CommandSpec{} ->
+    cond do
+      input_mode not in [:prompt, :json_input] ->
         {:error, {:invalid_input_mode, input_mode}}
 
-      _other ->
-        {:error, {:missing_option, :command_spec}}
+      GovernedLaunch.governed?(opts) ->
+        build_governed_invocation(input_mode, opts)
+
+      true ->
+        build_standalone_invocation(input_mode, opts)
     end
   end
 
@@ -565,15 +553,21 @@ defmodule AmpSdk.Runtime.CLI do
 
   @doc false
   @spec build_env(Options.t()) :: map()
-  def build_env(%Options{env: env, toolbox: toolbox}) do
-    Env.build_cli_env(env || %{}, toolbox: toolbox)
+  def build_env(%Options{} = options) do
+    case GovernedLaunch.authority(options) do
+      {:ok, %CliSubprocessCore.GovernedAuthority{} = authority} ->
+        authority.env
+
+      _ ->
+        Env.build_cli_env(options.env || %{}, toolbox: options.toolbox)
+    end
   end
 
   defp build_session_options(
          input,
          input_mode,
          %Options{} = options,
-         %CommandSpec{} = command_spec,
+         command_spec,
          settings_path,
          runtime_opts
        ) do
@@ -588,7 +582,6 @@ defmodule AmpSdk.Runtime.CLI do
       metadata: metadata,
       session_event_tag:
         Keyword.get(runtime_opts, :session_event_tag, @default_session_event_tag),
-      command_spec: command_spec,
       input_mode: input_mode,
       model_payload: options.model_payload,
       mode: options.mode,
@@ -601,8 +594,6 @@ defmodule AmpSdk.Runtime.CLI do
       labels: options.labels,
       thinking: options.thinking,
       settings_path: settings_path,
-      cwd: default_cwd(options.cwd, options.execution_surface),
-      env: build_env(options),
       headless_timeout_ms: :infinity,
       max_stderr_buffer_size: options.max_stderr_buffer_bytes,
       permissions: options.permissions,
@@ -613,6 +604,32 @@ defmodule AmpSdk.Runtime.CLI do
       no_jetbrains: options.no_jetbrains
     ]
     |> maybe_put_prompt(input_mode, input)
+    |> put_launch_options(command_spec, options)
+  end
+
+  defp command_spec_for_options(%Options{} = options) do
+    if GovernedLaunch.governed?(options) do
+      {:ok, nil}
+    else
+      CLI.resolve(options.execution_surface)
+    end
+  end
+
+  defp put_launch_options(opts, nil, %Options{} = options) do
+    case GovernedLaunch.authority(options) do
+      {:ok, %CliSubprocessCore.GovernedAuthority{} = authority} ->
+        Keyword.put(opts, :governed_authority, authority)
+
+      _ ->
+        opts
+    end
+  end
+
+  defp put_launch_options(opts, %CommandSpec{} = command_spec, %Options{} = options) do
+    opts
+    |> Keyword.put(:command_spec, command_spec)
+    |> Keyword.put(:cwd, default_cwd(options.cwd, options.execution_surface))
+    |> Keyword.put(:env, build_env(options))
     |> Keyword.merge(Options.execution_surface_opts(options))
   end
 
@@ -620,6 +637,16 @@ defmodule AmpSdk.Runtime.CLI do
 
   defp default_cwd(_cwd, execution_surface) do
     if ExecutionSurface.nonlocal_path_surface?(execution_surface), do: nil, else: File.cwd!()
+  end
+
+  defp render_cwd(%Options{} = options) do
+    case GovernedLaunch.authority(options) do
+      {:ok, %CliSubprocessCore.GovernedAuthority{} = authority} ->
+        authority.cwd
+
+      _ ->
+        default_cwd(options.cwd, options.execution_surface)
+    end
   end
 
   defp build_invocation_args(%Options{} = options, input_mode, opts) do
@@ -670,6 +697,7 @@ defmodule AmpSdk.Runtime.CLI do
       thinking: Keyword.get(opts, :thinking, false),
       permissions: Keyword.get(opts, :permissions),
       skills: Keyword.get(opts, :skills),
+      governed_authority: Keyword.get(opts, :governed_authority),
       execution_surface: nil,
       no_ide: Keyword.get(opts, :no_ide, false),
       no_notifications: Keyword.get(opts, :no_notifications, false),
@@ -677,6 +705,37 @@ defmodule AmpSdk.Runtime.CLI do
       no_jetbrains: Keyword.get(opts, :no_jetbrains, false)
     }
     |> Options.validate!()
+  end
+
+  defp build_governed_invocation(input_mode, opts) do
+    options = options_from_provider_opts(opts)
+
+    with {:ok, args} <- build_invocation_args(options, input_mode, opts) do
+      args = maybe_add_settings(args, Keyword.get(opts, :settings_path))
+      GovernedLaunch.invocation(args, opts)
+    end
+  end
+
+  defp build_standalone_invocation(input_mode, opts) do
+    case Keyword.get(opts, :command_spec) do
+      %CommandSpec{} = command_spec ->
+        options = options_from_provider_opts(opts)
+
+        with {:ok, args} <- build_invocation_args(options, input_mode, opts) do
+          args = maybe_add_settings(args, Keyword.get(opts, :settings_path))
+
+          {:ok,
+           CliSubprocessCore.Command.new(
+             command_spec.program,
+             CLI.command_args(command_spec, args),
+             cwd: default_cwd(Keyword.get(opts, :cwd), Keyword.get(opts, :execution_surface)),
+             env: Keyword.get(opts, :env, %{})
+           )}
+        end
+
+      _other ->
+        {:error, {:missing_option, :command_spec}}
+    end
   end
 
   defp maybe_override_execution_surface(%Options{} = options, nil), do: options

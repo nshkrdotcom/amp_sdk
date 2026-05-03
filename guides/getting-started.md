@@ -25,6 +25,10 @@ amp login
 
 Or set the `AMP_API_KEY` environment variable.
 
+`amp login` and `AMP_API_KEY` are standalone direct-use authentication. In
+governed execution, Amp credentials, command, cwd, env, target, and redaction
+metadata must come from the supplied governed authority.
+
 ## Add to Your Project
 
 ```elixir

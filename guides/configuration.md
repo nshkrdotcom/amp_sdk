@@ -149,6 +149,12 @@ AmpSdk.run("List files", %Options{mcp_config: mcp})
 
 `AmpSdk.run/2` and `AmpSdk.execute/2` share the same environment construction path: a small base system allowlist (`PATH`, `HOME`, etc.), `AMP_TEST_*` harness keys, explicit per-run overrides, and automatic `AMP_SDK_VERSION` injection. Provider behavior keys such as `AMP_API_KEY`, `AMP_URL`, `AMP_LOG_LEVEL`, `AMP_LOG_FILE`, and `AMP_SETTINGS_FILE` are not ambiently forwarded by the runtime path. Pass provider behavior environment explicitly through `Options.env` or the typed option when applicable.
 
+Governed execution is a separate mode selected by explicit authority. It
+rejects `Options.env`, `AMP_CLI_PATH`, `AMP_API_KEY`, `AMP_URL`, log/settings
+file paths, permissions/skills settings, MCP config, MCP OAuth credential
+options, cwd overrides, and execution-surface overrides. The governed process
+receives only the authority-materialized command, cwd, and env.
+
 Additional env vars per execution:
 
 ```elixir
@@ -207,6 +213,9 @@ The SDK locates the Amp CLI by checking (in order):
 2. `~/.amp/bin/amp`
 3. `~/.local/bin/amp`
 4. System `PATH`
+
+This discovery order is standalone direct-use behavior only. Governed execution
+bypasses it and launches the authority-materialized command.
 
 Use `AmpSdk.CLI.resolve/1` to inspect the command spec:
 

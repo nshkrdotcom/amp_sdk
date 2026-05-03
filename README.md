@@ -94,6 +94,12 @@ Or set the `AMP_API_KEY` environment variable:
 export AMP_API_KEY=your-api-key
 ```
 
+These authentication paths are standalone direct-use compatibility. Governed
+execution does not treat `amp login`, `AMP_API_KEY`, native Amp config, or MCP
+OAuth state as authority; callers must pass an explicit governed authority that
+materializes command, cwd, env, target, credential lease, command reference, and
+redaction reference for the effect.
+
 ### CLI Discovery
 
 The SDK locates the Amp CLI automatically by checking, in order:
@@ -700,6 +706,11 @@ retained-stderr capture, and execution-surface routing are defined in
 | `AMP_SDK_VERSION` | SDK identifier sent to CLI (auto-set to `elixir-<current package version>`) |
 
 `AmpSdk.run/2` and `AmpSdk.execute/2` use the same CLI env builder: a small base system allowlist (`PATH`, `HOME`, etc.), `AMP_TEST_*` harness keys, explicit `Options.env` overrides, and automatic `AMP_SDK_VERSION` tagging. Provider behavior keys such as `AMP_API_KEY`, `AMP_URL`, and `AMP_TOOLBOX` are not ambiently inherited by the runtime path; pass them explicitly through `Options.env` or the typed option when applicable.
+
+In governed execution, `Options.env`, `AMP_CLI_PATH`, `AMP_API_KEY`,
+`AMP_URL`, settings files, permissions settings, MCP config, and MCP OAuth
+credentials are rejected as unmanaged authority inputs. The launched process
+receives only the authority-materialized env with `clear_env?: true`.
 
 Additional env vars can be passed per-execution via `Options.env`:
 

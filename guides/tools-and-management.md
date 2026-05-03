@@ -137,6 +137,11 @@ Manage OAuth credentials for HTTP MCP servers.
 
 The server must already be configured (via `mcp_add/3`) and expose OAuth metadata:
 
+MCP OAuth login, status, and logout operate on native Amp OAuth state for
+standalone direct use. Governed execution rejects these OAuth credential and
+state-management operations; governed provider effects must receive credential
+leases through authority materialization instead.
+
 ```elixir
 # Register OAuth credentials
 {:ok, _} = AmpSdk.mcp_oauth_login("my-server",

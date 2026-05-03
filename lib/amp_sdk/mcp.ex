@@ -1,7 +1,7 @@
 defmodule AmpSdk.MCP do
   @moduledoc "MCP server management via the Amp CLI."
 
-  alias AmpSdk.{CLIInvoke, Error}
+  alias AmpSdk.{CLIInvoke, Error, GovernedLaunch}
   alias AmpSdk.Types.MCPServer
 
   @spec add(String.t(), String.t() | [String.t()], keyword()) ::
@@ -9,22 +9,26 @@ defmodule AmpSdk.MCP do
   def add(name, command_or_url, opts \\ [])
 
   def add(name, url, opts) when is_binary(name) and is_binary(url) and is_list(opts) do
-    args =
-      ["mcp", "add", name]
-      |> maybe_append_workspace(opts)
-      |> append_kv_flags("--header", opts[:header])
-      |> Kernel.++([url])
+    with :ok <- validate_governed_native_state(opts, :mcp_add) do
+      args =
+        ["mcp", "add", name]
+        |> maybe_append_workspace(opts)
+        |> append_kv_flags("--header", opts[:header])
+        |> Kernel.++([url])
 
-    CLIInvoke.invoke(args, opts)
+      CLIInvoke.invoke(args, opts)
+    end
   end
 
   def add(name, [command | args], opts) when is_binary(name) and is_list(opts) do
-    base =
-      ["mcp", "add", name]
-      |> maybe_append_workspace(opts)
-      |> append_kv_flags("--env", opts[:env])
+    with :ok <- validate_governed_native_state(opts, :mcp_add) do
+      base =
+        ["mcp", "add", name]
+        |> maybe_append_workspace(opts)
+        |> append_kv_flags("--env", opts[:env])
 
-    CLIInvoke.invoke(base ++ ["--", command | args], opts)
+      CLIInvoke.invoke(base ++ ["--", command | args], opts)
+    end
   end
 
   @spec list(keyword()) :: {:ok, [MCPServer.t()]} | {:error, Error.t()}
@@ -55,28 +59,38 @@ defmodule AmpSdk.MCP do
 
   @spec oauth_login(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
   def oauth_login(server_name, opts \\ []) when is_binary(server_name) do
-    args = ["mcp", "oauth", "login", server_name]
-    args = if opts[:server_url], do: args ++ ["--server-url", opts[:server_url]], else: args
-    args = if opts[:client_id], do: args ++ ["--client-id", opts[:client_id]], else: args
+    with :ok <- validate_governed_native_state(opts, :mcp_oauth) do
+      args = ["mcp", "oauth", "login", server_name]
+      args = if opts[:server_url], do: args ++ ["--server-url", opts[:server_url]], else: args
+      args = if opts[:client_id], do: args ++ ["--client-id", opts[:client_id]], else: args
 
-    args =
-      if opts[:client_secret], do: args ++ ["--client-secret", opts[:client_secret]], else: args
+      args =
+        if opts[:client_secret], do: args ++ ["--client-secret", opts[:client_secret]], else: args
 
-    args = if opts[:scopes], do: args ++ ["--scopes", opts[:scopes]], else: args
-    args = if opts[:auth_url], do: args ++ ["--auth-url", opts[:auth_url]], else: args
-    args = if opts[:token_url], do: args ++ ["--token-url", opts[:token_url]], else: args
+      args = if opts[:scopes], do: args ++ ["--scopes", opts[:scopes]], else: args
+      args = if opts[:auth_url], do: args ++ ["--auth-url", opts[:auth_url]], else: args
+      args = if opts[:token_url], do: args ++ ["--token-url", opts[:token_url]], else: args
 
-    CLIInvoke.invoke(args, opts)
+      CLIInvoke.invoke(args, opts)
+    end
   end
 
   @spec oauth_logout(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
   def oauth_logout(server_name, opts \\ []) when is_binary(server_name) do
-    CLIInvoke.invoke(["mcp", "oauth", "logout", server_name], opts)
+    with :ok <- validate_governed_native_state(opts, :mcp_oauth) do
+      CLIInvoke.invoke(["mcp", "oauth", "logout", server_name], opts)
+    end
   end
 
   @spec oauth_status(String.t(), keyword()) :: {:ok, String.t()} | {:error, Error.t()}
   def oauth_status(server_name, opts \\ []) when is_binary(server_name) do
-    CLIInvoke.invoke(["mcp", "oauth", "status", server_name], opts)
+    with :ok <- validate_governed_native_state(opts, :mcp_oauth) do
+      CLIInvoke.invoke(["mcp", "oauth", "status", server_name], opts)
+    end
+  end
+
+  defp validate_governed_native_state(opts, scope) do
+    GovernedLaunch.validate_native_state(opts, scope)
   end
 
   defp maybe_append_workspace(args, opts) do
