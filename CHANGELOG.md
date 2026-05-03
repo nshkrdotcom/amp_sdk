@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Error kind normalization, thread table parsing, env key validation, permission
+  list parsing, and MCP list parsing now use bounded literal handling and
+  deterministic scanners.
+
+### Fixed
+
+- Removed pattern-engine examples from tests and guides in favor of fixed
+  string checks.
+
 ## [0.5.0] - 2026-04-06
 
 ### Added

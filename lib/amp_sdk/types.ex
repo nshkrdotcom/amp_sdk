@@ -328,6 +328,7 @@ defmodule AmpSdk.Types do
     alias AmpSdk.Schema
     alias AmpSdk.Schema.Message
 
+    @known_statuses ~w(approved authenticated connected disabled disconnected error failed pending unauthenticated unauthorized unknown)
     @known_fields ["name", "status"]
     @schema Message.mcp_server_status()
 
@@ -345,12 +346,7 @@ defmodule AmpSdk.Types do
         {:ok, parsed} ->
           {known, extra} = Schema.split_extra(parsed, @known_fields)
 
-          {:ok,
-           %__MODULE__{
-             name: Map.get(known, "name", ""),
-             status: Map.get(known, "status", ""),
-             extra: extra
-           }}
+          {:ok, build(Map.get(known, "name", ""), Map.get(known, "status", ""), extra)}
 
         {:error, {:invalid_mcp_server_status, details}} ->
           {:error, {:invalid_mcp_server_status, details}}
@@ -364,15 +360,27 @@ defmodule AmpSdk.Types do
       parsed = Schema.parse!(@schema, map, :invalid_mcp_server_status)
       {known, extra} = Schema.split_extra(parsed, @known_fields)
 
-      %__MODULE__{
-        name: Map.get(known, "name", ""),
-        status: Map.get(known, "status", ""),
-        extra: extra
-      }
+      build(Map.get(known, "name", ""), Map.get(known, "status", ""), extra)
     end
 
     @spec from_map(map()) :: t()
     def from_map(map), do: parse!(map)
+
+    defp build(name, status, extra) do
+      {status, extra} = normalize_status(status, extra)
+
+      %__MODULE__{
+        name: name,
+        status: status,
+        extra: extra
+      }
+    end
+
+    defp normalize_status(status, extra) when status in @known_statuses, do: {status, extra}
+
+    defp normalize_status(status, extra) do
+      {"unknown", Map.put(extra, "raw_status", status)}
+    end
   end
 
   defmodule AssistantPayload do
@@ -969,6 +977,7 @@ defmodule AmpSdk.Types do
           }
     @derive Jason.Encoder
     @enforce_keys [:tool, :action]
+    @allowed_actions ~w(allow reject ask delegate)
     defstruct [:tool, :action, :matches, :context, :to]
 
     @spec new(String.t(), String.t(), keyword()) :: {:ok, t()} | {:error, Error.t()}
@@ -1011,10 +1020,15 @@ defmodule AmpSdk.Types do
     end
 
     defp validate_action(action) do
-      if String.trim(action) == "" do
-        {:error, Error.new(:invalid_configuration, "Permission action cannot be empty")}
-      else
-        :ok
+      cond do
+        String.trim(action) == "" ->
+          {:error, Error.new(:invalid_configuration, "Permission action cannot be empty")}
+
+        action in @allowed_actions ->
+          :ok
+
+        true ->
+          {:error, Error.new(:invalid_configuration, "Permission action is invalid")}
       end
     end
 

@@ -5,7 +5,7 @@ defmodule AmpSdk do
   Provides programmatic access to Amp's AI-powered coding agent via the CLI.
   """
 
-  alias AmpSdk.Error
+  alias AmpSdk.{Error, ErrorKind, StringScan}
   alias AmpSdk.Types
   alias AmpSdk.Types.{ErrorResultMessage, Options, ResultMessage}
 
@@ -45,22 +45,23 @@ defmodule AmpSdk do
     )
   end
 
-  defp normalize_error_kind(kind, _message) when is_atom(kind) and kind not in [nil, :unknown],
-    do: kind
-
-  defp normalize_error_kind(kind, _message)
-       when is_binary(kind) and kind not in ["", "unknown"] do
-    kind
-    |> String.downcase()
-    |> String.replace("-", "_")
-    |> String.to_atom()
+  defp normalize_error_kind(kind, message) do
+    case ErrorKind.from_external(kind) do
+      nil -> fallback_error_kind(message)
+      :unknown -> :unknown
+      known -> known
+    end
   end
 
-  defp normalize_error_kind(_kind, message) when is_binary(message) do
-    if String.match?(message, ~r/auth|log in|login/i), do: :auth_error, else: :execution_failed
+  defp fallback_error_kind(message) when is_binary(message) do
+    if StringScan.contains_any_ci?(message, ["auth", "log in", "login"]) do
+      :auth_error
+    else
+      :execution_failed
+    end
   end
 
-  defp normalize_error_kind(_kind, _message), do: :execution_failed
+  defp fallback_error_kind(_message), do: :execution_failed
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)

@@ -7,7 +7,7 @@ defmodule AmpSdk.Runtime.CLI do
   treating the underlying session tag as core identity.
   """
 
-  alias AmpSdk.{CLI, Env, Error, Types, Util}
+  alias AmpSdk.{CLI, Env, Error, ErrorKind, Types, Util}
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.CommandSpec
   alias CliSubprocessCore.Event, as: CoreEvent
@@ -813,13 +813,6 @@ defmodule AmpSdk.Runtime.CLI do
 
   defp valid_session_id?(value), do: value not in ["", "nil"]
 
-  defp existing_error_kind(code) do
-    String.to_existing_atom(code)
-  rescue
-    ArgumentError ->
-      :unknown
-  end
-
   defp integer_value(value) when is_integer(value), do: value
 
   defp integer_value(value) when is_binary(value) do
@@ -917,32 +910,9 @@ defmodule AmpSdk.Runtime.CLI do
     |> Map.merge(normalize_raw_map(raw))
   end
 
-  defp normalize_error_kind(nil), do: nil
-  defp normalize_error_kind(:unknown), do: nil
+  defp normalize_error_kind(code) when is_binary(code) or is_atom(code),
+    do: ErrorKind.from_external(code)
 
-  defp normalize_error_kind(code) when is_binary(code) do
-    case code do
-      "unknown" ->
-        nil
-
-      "transport_error" ->
-        :transport_error
-
-      "transport_exit" ->
-        :transport_exit
-
-      "parse_error" ->
-        :parse_error
-
-      "user_cancelled" ->
-        :execution_failed
-
-      _other ->
-        existing_error_kind(code)
-    end
-  end
-
-  defp normalize_error_kind(code) when is_atom(code), do: code
   defp normalize_error_kind(_code), do: nil
 
   defp exit_message(exit) do

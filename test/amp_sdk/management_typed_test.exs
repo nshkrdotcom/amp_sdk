@@ -152,6 +152,21 @@ defmodule AmpSdk.ManagementTypedTest do
     )
   end
 
+  test "permissions_list rejects unknown permission actions" do
+    output = """
+    [{"tool":"Read","action":"future_action"}]
+    """
+
+    with_cli_stub(
+      fn _args_file, _stdin_file ->
+        assert {:error, %Error{kind: :parse_error} = error} = AmpSdk.permissions_list()
+        assert error.message =~ "Failed to parse permissions list output"
+        assert error.context.reason == :invalid_permission_rule
+      end,
+      %{"AMP_TEST_OUTPUT" => output}
+    )
+  end
+
   test "mcp_list returns typed mcp servers using JSON output" do
     output = """
     [{"name":"filesystem","type":"command","source":"workspace","command":"npx","args":["-y","@modelcontextprotocol/server-filesystem"],"future_server_flag":"kept"},{"name":"remote","type":"url","source":"global","url":"https://example.com/mcp"}]
@@ -190,6 +205,21 @@ defmodule AmpSdk.ManagementTypedTest do
         assert error.message =~ "Failed to decode MCP list JSON"
       end,
       %{"AMP_TEST_OUTPUT" => "not-json"}
+    )
+  end
+
+  test "mcp_list rejects unknown server types" do
+    output = """
+    [{"name":"future","type":"future_transport","source":"workspace"}]
+    """
+
+    with_cli_stub(
+      fn _args_file, _stdin_file ->
+        assert {:error, %Error{kind: :parse_error} = error} = AmpSdk.mcp_list()
+        assert error.message =~ "Failed to parse MCP list output"
+        assert error.context.reason == :invalid_mcp_server
+      end,
+      %{"AMP_TEST_OUTPUT" => output}
     )
   end
 end

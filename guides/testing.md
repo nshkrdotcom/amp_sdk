@@ -85,7 +85,7 @@ defmodule MyApp.AmpLiveTest do
       "Reply with only: hello",
       %AmpSdk.Types.Options{dangerously_allow_all: true}
     )
-    assert result =~ ~r/hello/i
+    assert String.contains?(String.downcase(result), "hello")
   end
 end
 ```

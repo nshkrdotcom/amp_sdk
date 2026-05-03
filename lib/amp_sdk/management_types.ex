@@ -22,10 +22,11 @@ defmodule AmpSdk.Types.PermissionRule do
   Structured representation of a permission rule returned by `AmpSdk.permissions_list/1`.
   """
 
-  alias AmpSdk.Schema
+  alias AmpSdk.{Error, Schema}
   alias CliSubprocessCore.Schema.Conventions
 
   @enforce_keys [:tool, :action]
+  @allowed_actions ~w(allow reject ask delegate)
   @known_fields ["tool", "action", "context", "to", "matches"]
   @schema Zoi.map(
             %{
@@ -62,15 +63,7 @@ defmodule AmpSdk.Types.PermissionRule do
       {:ok, parsed} ->
         {known, extra} = Schema.split_extra(parsed, @known_fields)
 
-        {:ok,
-         %__MODULE__{
-           tool: Map.fetch!(known, "tool"),
-           action: Map.fetch!(known, "action"),
-           context: Map.get(known, "context"),
-           to: Map.get(known, "to"),
-           matches: Map.get(known, "matches"),
-           extra: extra
-         }}
+        build_rule(known, extra)
 
       {:error, {:invalid_permission_rule, details}} ->
         {:error, {:invalid_permission_rule, details}}
@@ -81,17 +74,13 @@ defmodule AmpSdk.Types.PermissionRule do
   def parse!(%__MODULE__{} = rule), do: rule
 
   def parse!(map) when is_map(map) do
-    parsed = Schema.parse!(@schema, map, :invalid_permission_rule)
-    {known, extra} = Schema.split_extra(parsed, @known_fields)
+    case parse(map) do
+      {:ok, rule} ->
+        rule
 
-    %__MODULE__{
-      tool: Map.fetch!(known, "tool"),
-      action: Map.fetch!(known, "action"),
-      context: Map.get(known, "context"),
-      to: Map.get(known, "to"),
-      matches: Map.get(known, "matches"),
-      extra: extra
-    }
+      {:error, {:invalid_permission_rule, details}} ->
+        raise Error.new(:invalid_configuration, "Invalid permission rule", cause: details)
+    end
   end
 
   @spec to_map(t()) :: map()
@@ -107,6 +96,28 @@ defmodule AmpSdk.Types.PermissionRule do
     |> Map.new()
     |> Map.merge(rule.extra)
   end
+
+  defp build_rule(known, extra) do
+    action = Map.fetch!(known, "action")
+
+    if action in @allowed_actions do
+      {:ok,
+       %__MODULE__{
+         tool: Map.fetch!(known, "tool"),
+         action: action,
+         context: Map.get(known, "context"),
+         to: Map.get(known, "to"),
+         matches: Map.get(known, "matches"),
+         extra: extra
+       }}
+    else
+      {:error, {:invalid_permission_rule, invalid_detail("action", action, @allowed_actions)}}
+    end
+  end
+
+  defp invalid_detail(field, value, allowed) do
+    %{message: "#{field} is invalid", path: [field], value: value, allowed: allowed}
+  end
 end
 
 defmodule AmpSdk.Types.MCPServer do
@@ -114,10 +125,12 @@ defmodule AmpSdk.Types.MCPServer do
   Structured representation of an MCP server returned by `AmpSdk.mcp_list/1`.
   """
 
-  alias AmpSdk.Schema
+  alias AmpSdk.{Error, Schema}
   alias CliSubprocessCore.Schema.Conventions
 
   @enforce_keys [:name, :type, :source]
+  @allowed_types ~w(command url)
+  @allowed_sources ~w(global workspace)
   @known_fields ["name", "type", "source", "command", "args", "url"]
   @schema Zoi.map(
             %{
@@ -155,16 +168,7 @@ defmodule AmpSdk.Types.MCPServer do
       {:ok, parsed} ->
         {known, extra} = Schema.split_extra(parsed, @known_fields)
 
-        {:ok,
-         %__MODULE__{
-           name: Map.fetch!(known, "name"),
-           type: Map.fetch!(known, "type"),
-           source: Map.fetch!(known, "source"),
-           command: Map.get(known, "command"),
-           args: Map.get(known, "args", []),
-           url: Map.get(known, "url"),
-           extra: extra
-         }}
+        build_server(known, extra)
 
       {:error, {:invalid_mcp_server, details}} ->
         {:error, {:invalid_mcp_server, details}}
@@ -175,18 +179,13 @@ defmodule AmpSdk.Types.MCPServer do
   def parse!(%__MODULE__{} = server), do: server
 
   def parse!(map) when is_map(map) do
-    parsed = Schema.parse!(@schema, map, :invalid_mcp_server)
-    {known, extra} = Schema.split_extra(parsed, @known_fields)
+    case parse(map) do
+      {:ok, server} ->
+        server
 
-    %__MODULE__{
-      name: Map.fetch!(known, "name"),
-      type: Map.fetch!(known, "type"),
-      source: Map.fetch!(known, "source"),
-      command: Map.get(known, "command"),
-      args: Map.get(known, "args", []),
-      url: Map.get(known, "url"),
-      extra: extra
-    }
+      {:error, {:invalid_mcp_server, details}} ->
+        raise Error.new(:invalid_configuration, "Invalid MCP server", cause: details)
+    end
   end
 
   @spec to_map(t()) :: map()
@@ -202,5 +201,35 @@ defmodule AmpSdk.Types.MCPServer do
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
     |> Map.merge(server.extra)
+  end
+
+  defp build_server(known, extra) do
+    type = Map.fetch!(known, "type")
+    source = Map.fetch!(known, "source")
+
+    with :ok <- validate_member("type", type, @allowed_types),
+         :ok <- validate_member("source", source, @allowed_sources) do
+      {:ok,
+       %__MODULE__{
+         name: Map.fetch!(known, "name"),
+         type: type,
+         source: source,
+         command: Map.get(known, "command"),
+         args: Map.get(known, "args", []),
+         url: Map.get(known, "url"),
+         extra: extra
+       }}
+    else
+      {:error, details} ->
+        {:error, {:invalid_mcp_server, details}}
+    end
+  end
+
+  defp validate_member(field, value, allowed) do
+    if value in allowed do
+      :ok
+    else
+      {:error, %{message: "#{field} is invalid", path: [field], value: value, allowed: allowed}}
+    end
   end
 end

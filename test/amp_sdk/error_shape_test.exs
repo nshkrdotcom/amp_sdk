@@ -88,4 +88,32 @@ defmodule AmpSdk.ErrorShapeTest do
       File.rm_rf(dir)
     end
   end
+
+  test "AmpSdk.run bounds unknown structured error kinds" do
+    dir = TestSupport.tmp_dir!("amp_error_shape_unknown_kind")
+    amp_path = write_stream_stub!(dir)
+
+    error_json =
+      Jason.encode!(%{
+        type: "result",
+        subtype: "error_during_execution",
+        is_error: true,
+        error: "future provider failure",
+        kind: "future_provider_kind",
+        duration_ms: 1,
+        num_turns: 1
+      })
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        assert {:error, %Error{} = error} =
+                 AmpSdk.run("prompt", %Options{env: %{"AMP_TEST_OUTPUT_JSON" => error_json}})
+
+        assert error.kind == :unknown
+        assert error.message == "future provider failure"
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
 end

@@ -1,6 +1,8 @@
 defmodule AmpSdk.Env do
   @moduledoc false
 
+  alias AmpSdk.StringScan
+
   @base_env_keys ~w(PATH HOME USER LOGNAME SHELL TERM TMPDIR TEMP TMP)
   @sdk_version_env_key "AMP_SDK_VERSION"
   @toolbox_env_key "AMP_TOOLBOX"
@@ -68,7 +70,7 @@ defmodule AmpSdk.Env do
 
   @spec valid_env_key?(String.t()) :: boolean()
   def valid_env_key?(key) when is_binary(key) do
-    String.match?(key, ~r/^[A-Za-z_][A-Za-z0-9_]*$/)
+    StringScan.ascii_env_key?(key)
   end
 
   def valid_env_key?(_), do: false

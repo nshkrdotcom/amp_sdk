@@ -1,11 +1,10 @@
 defmodule AmpSdk.Threads do
   @moduledoc "Thread management via the Amp CLI."
 
-  alias AmpSdk.{CLIInvoke, Error, Util}
+  alias AmpSdk.{CLIInvoke, Error, StringScan, Util}
   alias AmpSdk.Types.ThreadSummary
 
   @type visibility :: :private | :public | :workspace | :group
-  @thread_row_regex ~r/^(?<title>.*?)\s{2,}(?<last_updated>.*?)\s{2,}(?<visibility>[A-Za-z]+)\s{2,}(?<messages>\d+)\s{2,}(?<id>T-[A-Za-z0-9-]+)\s*$/
 
   @spec new(keyword()) :: {:ok, String.t()} | {:error, Error.t()}
   def new(opts \\ []) do
@@ -176,30 +175,47 @@ defmodule AmpSdk.Threads do
   end
 
   defp parse_row(row) when is_binary(row) do
-    case Regex.named_captures(@thread_row_regex, row) do
-      %{
-        "id" => id,
-        "last_updated" => last_updated,
-        "messages" => messages,
-        "title" => title,
-        "visibility" => visibility
-      } ->
-        {:ok,
-         %ThreadSummary{
-           id: String.trim(id),
-           title: String.trim(title),
-           last_updated: String.trim(last_updated),
-           visibility: parse_visibility(visibility),
-           messages: String.to_integer(messages)
-         }}
+    case StringScan.split_on_repeated_spaces(row) do
+      [title, last_updated, visibility, messages, id] ->
+        with {:ok, messages} <- parse_messages(messages),
+             true <- valid_thread_id?(id) do
+          {:ok,
+           %ThreadSummary{
+             id: String.trim(id),
+             title: String.trim(title),
+             last_updated: String.trim(last_updated),
+             visibility: parse_visibility(visibility),
+             messages: messages
+           }}
+        else
+          _ ->
+            unmatched_row_error()
+        end
 
       _ ->
-        {:error,
-         Error.new(:parse_error, "Failed to parse thread list output",
-           context: %{reason: :unmatched_row}
-         )}
+        unmatched_row_error()
     end
   end
+
+  defp unmatched_row_error do
+    {:error,
+     Error.new(:parse_error, "Failed to parse thread list output",
+       context: %{reason: :unmatched_row}
+     )}
+  end
+
+  defp parse_messages(messages) do
+    case messages |> String.trim() |> Integer.parse() do
+      {count, ""} when count >= 0 ->
+        {:ok, count}
+
+      _ ->
+        :error
+    end
+  end
+
+  defp valid_thread_id?("T-" <> rest), do: StringScan.ascii_alphanumeric_or_dash?(rest)
+  defp valid_thread_id?(_id), do: false
 
   defp drop_table_header([header, separator | rows]) do
     if String.contains?(header, "Thread ID") and separator_line?(separator),
@@ -210,8 +226,7 @@ defmodule AmpSdk.Threads do
   defp drop_table_header(rows), do: rows
 
   defp separator_line?(line) when is_binary(line) do
-    stripped = line |> String.replace(" ", "")
-    stripped != "" and Regex.match?(~r/^[^[:alnum:]]+$/, stripped)
+    StringScan.non_alphanumeric_separator?(line)
   end
 
   defp no_records_line?(line) when is_binary(line) do

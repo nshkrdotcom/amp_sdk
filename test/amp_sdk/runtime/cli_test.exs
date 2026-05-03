@@ -401,6 +401,37 @@ defmodule AmpSdk.Runtime.CLITest do
              } = error_message
     end
 
+    test "projects unknown provider error codes as bounded unknown kinds" do
+      state = CLI.new_projection_state(%{invocation: %{cwd: "/tmp/demo"}})
+
+      provider_error =
+        Event.new(:error,
+          provider: :amp,
+          provider_session_id: "amp-session-future-error",
+          raw: %{"type" => "future_error", "future_code" => "provider_added_new_code"},
+          payload:
+            Payload.Error.new(
+              message: "provider added a new code",
+              code: "provider_added_new_code",
+              metadata: %{"phase" => "future"}
+            )
+        )
+
+      assert {[system_message, error_message], _state} = CLI.project_event(provider_error, state)
+      assert %Types.SystemMessage{session_id: "amp-session-future-error"} = system_message
+
+      assert %Types.ErrorResultMessage{
+               session_id: "amp-session-future-error",
+               kind: :unknown,
+               error: "provider added a new code",
+               details: %{
+                 "future_code" => "provider_added_new_code",
+                 "phase" => "future",
+                 "type" => "future_error"
+               }
+             } = error_message
+    end
+
     test "synthesizes a system message when the first session id arrives on a result" do
       state = CLI.new_projection_state(%{invocation: %{cwd: "/tmp/demo"}})
 

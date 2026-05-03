@@ -3,6 +3,7 @@ defmodule AmpSdk.LiveTest do
 
   @moduletag :live
 
+  alias AmpSdk.StringScan
   alias AmpSdk.Types.{Options, ResultMessage, SystemMessage, ThinkingContent}
 
   describe "execute/2 with real CLI" do
@@ -21,7 +22,7 @@ defmodule AmpSdk.LiveTest do
       assert length(result_msgs) == 1
 
       [result] = result_msgs
-      assert result.result =~ ~r/hello/i
+      assert StringScan.contains_any_ci?(result.result, ["hello"])
     end
 
     @tag timeout: 60_000
@@ -33,7 +34,7 @@ defmodule AmpSdk.LiveTest do
       error_msgs = Enum.filter(result, &match?(%AmpSdk.Types.ErrorResultMessage{}, &1))
       assert error_msgs != []
       [error] = error_msgs
-      assert error.error =~ ~r/rush|not permitted|stream/i
+      assert StringScan.contains_any_ci?(error.error, ["rush", "not permitted", "stream"])
     end
   end
 
@@ -74,7 +75,7 @@ defmodule AmpSdk.LiveTest do
     test "returns error for rush mode" do
       assert {:error, error} = AmpSdk.run("hello", %Options{mode: "rush"})
       assert %AmpSdk.Error{} = error
-      assert error.message =~ ~r/rush|not permitted|stream/i
+      assert StringScan.contains_any_ci?(error.message, ["rush", "not permitted", "stream"])
     end
   end
 
@@ -113,7 +114,7 @@ defmodule AmpSdk.LiveTest do
     @tag timeout: 30_000
     test "returns credit info" do
       assert {:ok, output} = AmpSdk.usage()
-      assert output =~ ~r/remaining|credits|usage/i
+      assert StringScan.contains_any_ci?(output, ["remaining", "credits", "usage"])
     end
   end
 end

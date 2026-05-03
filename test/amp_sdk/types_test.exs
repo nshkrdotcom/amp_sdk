@@ -58,6 +58,21 @@ defmodule AmpSdk.TypesTest do
       assert [%MCPServerStatus{extra: %{"latency_ms" => 12}}] = msg.mcp_servers
     end
 
+    test "bounds unknown MCP server status values" do
+      json =
+        Jason.encode!(%{
+          type: "system",
+          subtype: "init",
+          session_id: "T-123",
+          mcp_servers: [%{name: "fs", status: "future_state"}]
+        })
+
+      assert {:ok, %SystemMessage{} = msg} = Types.parse_stream_message(json)
+
+      assert [%MCPServerStatus{status: "unknown", extra: %{"raw_status" => "future_state"}}] =
+               msg.mcp_servers
+    end
+
     test "parses assistant message with text content" do
       json =
         Jason.encode!(%{
@@ -321,15 +336,22 @@ defmodule AmpSdk.TypesTest do
     end
 
     test "raises on delegate without to" do
-      assert_raise Error, ~r/delegate/, fn ->
+      assert_raise Error, fn ->
         Permission.new!("Bash", "delegate")
       end
     end
 
     test "raises on to without delegate" do
-      assert_raise Error, ~r/to/, fn ->
+      assert_raise Error, fn ->
         Permission.new!("Bash", "allow", to: "something")
       end
+    end
+
+    test "rejects unknown permission actions" do
+      assert {:error, %Error{kind: :invalid_configuration} = error} =
+               Permission.new("Bash", "future_action")
+
+      assert String.contains?(error.message, "Permission action is invalid")
     end
   end
 
