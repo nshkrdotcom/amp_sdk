@@ -10,7 +10,15 @@ defmodule AmpSdk.GovernedLaunchTest do
     GovernedAuthority.fetch!(%{
       authority_ref: "authority:amp:test",
       credential_lease_ref: Keyword.get(opts, :credential_lease_ref, "lease:amp:test"),
+      connector_instance_ref:
+        Keyword.get(opts, :connector_instance_ref, "connector-instance:amp:test"),
+      connector_binding_ref:
+        Keyword.get(opts, :connector_binding_ref, "connector-binding:amp:test"),
+      provider_account_ref: Keyword.get(opts, :provider_account_ref, "provider-account:amp:test"),
+      native_auth_assertion_ref:
+        Keyword.get(opts, :native_auth_assertion_ref, "native-auth-assertion:amp:test"),
       target_ref: Keyword.get(opts, :target_ref, "target:amp:test"),
+      operation_policy_ref: Keyword.get(opts, :operation_policy_ref, "operation-policy:amp:test"),
       materialized_command: command,
       materialized_cwd: Keyword.get(opts, :cwd),
       materialized_env: Keyword.get(opts, :env, %{}),
@@ -209,5 +217,32 @@ defmodule AmpSdk.GovernedLaunchTest do
     base = authority("/bin/amp", env: %{"AMP_AUTHORITY_TOKEN" => "lease-token"})
 
     assert :ok = GovernedLaunch.validate_options(%Options{governed_authority: base})
+  end
+
+  test "keeps two native auth roots distinct and redacts projected launch state" do
+    root_a =
+      authority("/authority/bin/amp",
+        provider_account_ref: "provider-account:amp:a",
+        native_auth_assertion_ref: "native-auth-assertion:amp:a",
+        auth_root: "/authority/amp/a"
+      )
+
+    root_b =
+      authority("/authority/bin/amp",
+        provider_account_ref: "provider-account:amp:b",
+        native_auth_assertion_ref: "native-auth-assertion:amp:b",
+        auth_root: "/authority/amp/b"
+      )
+
+    assert root_a.provider_account_ref == "provider-account:amp:a"
+    assert root_b.provider_account_ref == "provider-account:amp:b"
+    assert root_a.native_auth_assertion_ref != root_b.native_auth_assertion_ref
+
+    projection = GovernedAuthority.redacted(root_a)
+
+    assert projection.provider_account_ref == "provider-account:amp:a"
+    assert projection.native_auth_assertion_ref == "native-auth-assertion:amp:a"
+    assert projection.command != "/authority/bin/amp"
+    refute String.contains?(inspect(projection), "/authority/bin/amp")
   end
 end

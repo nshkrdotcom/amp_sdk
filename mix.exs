@@ -15,6 +15,7 @@ defmodule AmpSdk.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      aliases: aliases(),
       docs: docs(),
       description: description(),
       package: package(),
@@ -29,6 +30,14 @@ defmodule AmpSdk.MixProject do
     [
       mod: {AmpSdk.Application, []},
       extra_applications: [:logger]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        ci: :test
+      ]
     ]
   end
 
@@ -234,6 +243,17 @@ defmodule AmpSdk.MixProject do
       plt_add_apps: [:mix, :ex_unit],
       plt_core_path: "priv/plts/core",
       plt_local_path: "priv/plts"
+    ]
+  end
+
+  defp aliases do
+    [
+      ci: [
+        "format --check-formatted",
+        "compile --warnings-as-errors",
+        "credo --strict",
+        "test"
+      ]
     ]
   end
 end
