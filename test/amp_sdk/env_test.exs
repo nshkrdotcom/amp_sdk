@@ -27,7 +27,14 @@ defmodule AmpSdk.EnvTest do
         refute Map.has_key?(stream_env, "NOT_AMP_KEY")
 
         explicit_stream_env =
-          AmpSdk.Env.build_cli_env(%{}, base_env: AmpSdk.Env.filtered_system_env())
+          AmpSdk.Env.build_cli_env(%{},
+            base_env: %{
+              "AMP_VALID_ALPHA" => "one",
+              "AMP_TEST_VALID_ALPHA" => "test-control",
+              "AMP.INVALID.KEY" => "two",
+              "NOT_AMP_KEY" => "three"
+            }
+          )
 
         refute Map.has_key?(explicit_stream_env, "AMP_VALID_ALPHA")
         assert explicit_stream_env["AMP_TEST_VALID_ALPHA"] == "test-control"
@@ -105,5 +112,20 @@ defmodule AmpSdk.EnvTest do
 
     assert AmpSdk.Env.normalize_overrides([{"AMP_ALPHA", "one"}, {"AMP_BETA", nil}]) ==
              %{"AMP_ALPHA" => "one"}
+  end
+
+  test "filtered_env accepts explicit base env and drops provider keys" do
+    assert AmpSdk.Env.filtered_env(%{
+             "PATH" => "/bin",
+             :HOME => "/tmp/home",
+             "AMP_TEST_ONE" => "yes",
+             "AMP_TOKEN" => "blocked",
+             "NOT_AMP" => "blocked",
+             "AMP_TEST_NIL" => nil
+           }) == %{
+             "PATH" => "/bin",
+             "HOME" => "/tmp/home",
+             "AMP_TEST_ONE" => "yes"
+           }
   end
 end

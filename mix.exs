@@ -1,3 +1,7 @@
+unless Code.ensure_loaded?(DependencySources) do
+  Code.require_file("build_support/dependency_sources.exs", __DIR__)
+end
+
 defmodule AmpSdk.MixProject do
   use Mix.Project
 
@@ -6,7 +10,7 @@ defmodule AmpSdk.MixProject do
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
   @homepage_url "https://hex.pm/packages/amp_sdk"
   @docs_url "https://hexdocs.pm/amp_sdk"
-  @cli_subprocess_core_version "~> 0.1.0"
+
   def project do
     [
       app: @app,
@@ -57,25 +61,7 @@ defmodule AmpSdk.MixProject do
   end
 
   defp cli_subprocess_core_dep do
-    case local_dep_path("../cli_subprocess_core") do
-      nil -> {:cli_subprocess_core, @cli_subprocess_core_version}
-      path -> {:cli_subprocess_core, path: path}
-    end
-  end
-
-  defp local_dep_path(relative_path) do
-    if local_workspace_deps?() do
-      path = Path.expand(relative_path, __DIR__)
-      if File.dir?(path), do: path
-    end
-  end
-
-  defp local_workspace_deps? do
-    not hex_packaging_task?() and not Enum.member?(Path.split(__DIR__), "deps")
-  end
-
-  defp hex_packaging_task? do
-    Enum.any?(System.argv(), &(&1 in ["hex.build", "hex.publish"]))
+    DependencySources.dep(:cli_subprocess_core, __DIR__)
   end
 
   defp description do
@@ -225,7 +211,8 @@ defmodule AmpSdk.MixProject do
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       },
       maintainers: ["nshkrdotcom"],
-      files: ~w(lib assets mix.exs README.md LICENSE CHANGELOG.md .formatter.exs examples guides),
+      files:
+        ~w(lib assets build_support mix.exs README.md LICENSE CHANGELOG.md .formatter.exs examples guides),
       exclude_patterns: [
         "**/_build/**",
         "**/deps/**",

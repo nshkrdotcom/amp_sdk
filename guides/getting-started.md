@@ -23,7 +23,7 @@ npm install -g @sourcegraph/amp
 amp login
 ```
 
-Or set the `AMP_API_KEY` environment variable.
+Or pass an API key explicitly through `Options.env`.
 
 `amp login` and `AMP_API_KEY` are standalone direct-use authentication. In
 governed execution, Amp credentials, command, cwd, env, target, and redaction

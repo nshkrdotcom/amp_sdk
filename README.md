@@ -88,11 +88,17 @@ Log in to your Amp account (required for execution):
 amp login
 ```
 
-Or set the `AMP_API_KEY` environment variable:
+Or pass an API key explicitly to the launched CLI environment:
 
-```bash
-export AMP_API_KEY=your-api-key
+```elixir
+AmpSdk.run("Summarize this repository", %AmpSdk.Types.Options{
+  env: %{"AMP_API_KEY" => "your-api-key"}
+})
 ```
+
+Host applications that intentionally source credentials from the OS
+environment should materialize those values in `config/runtime.exs` or another
+configuration boundary before calling the SDK.
 
 These authentication paths are standalone direct-use compatibility. Governed
 execution does not treat `amp login`, `AMP_API_KEY`, native Amp config, or MCP
@@ -106,7 +112,7 @@ The SDK locates the Amp CLI automatically by checking, in order:
 
 | Priority | Method | Details |
 |---|---|---|
-| 1 | `AMP_CLI_PATH` env var | Explicit path override (supports `.js` files via Node) |
+| 1 | Materialized `AMP_CLI_PATH` | Explicit path override from `:cli_subprocess_core, :provider_cli_env` (supports `.js` files via Node) |
 | 2 | `~/.amp/bin/amp` | Official binary install location |
 | 3 | `~/.local/bin/amp` | Symlink from install script |
 | 4 | System `PATH` | Standard executable lookup |
@@ -705,7 +711,12 @@ retained-stderr capture, and execution-surface routing are defined in
 | `AMP_TOOLBOX` | Path to toolbox scripts; pass through `Options.toolbox` for per-run control |
 | `AMP_SDK_VERSION` | SDK identifier sent to CLI (auto-set to `elixir-<current package version>`) |
 
-`AmpSdk.run/2` and `AmpSdk.execute/2` use the same CLI env builder: a small base system allowlist (`PATH`, `HOME`, etc.), `AMP_TEST_*` harness keys, explicit `Options.env` overrides, and automatic `AMP_SDK_VERSION` tagging. Provider behavior keys such as `AMP_API_KEY`, `AMP_URL`, and `AMP_TOOLBOX` are not ambiently inherited by the runtime path; pass them explicitly through `Options.env` or the typed option when applicable.
+`AmpSdk.run/2` and `AmpSdk.execute/2` use the same CLI env builder: explicit
+`Options.env` overrides, optional `:amp_sdk, :base_env` application config or
+caller-supplied base env maps, and automatic `AMP_SDK_VERSION` tagging.
+Provider behavior keys such as `AMP_API_KEY`, `AMP_URL`, and `AMP_TOOLBOX` are
+not ambiently inherited by the runtime path; pass them explicitly through
+`Options.env` or the typed option when applicable.
 
 In governed execution, `Options.env`, `AMP_CLI_PATH`, `AMP_API_KEY`,
 `AMP_URL`, settings files, permissions settings, MCP config, and MCP OAuth

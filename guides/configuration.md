@@ -147,7 +147,13 @@ AmpSdk.run("List files", %Options{mcp_config: mcp})
 | `AMP_LOG_FILE` | Log file path (alternative to `--log-file` flag) |
 | `AMP_SETTINGS_FILE` | Settings file path (alternative to `--settings-file` flag) |
 
-`AmpSdk.run/2` and `AmpSdk.execute/2` share the same environment construction path: a small base system allowlist (`PATH`, `HOME`, etc.), `AMP_TEST_*` harness keys, explicit per-run overrides, and automatic `AMP_SDK_VERSION` injection. Provider behavior keys such as `AMP_API_KEY`, `AMP_URL`, `AMP_LOG_LEVEL`, `AMP_LOG_FILE`, and `AMP_SETTINGS_FILE` are not ambiently forwarded by the runtime path. Pass provider behavior environment explicitly through `Options.env` or the typed option when applicable.
+`AmpSdk.run/2` and `AmpSdk.execute/2` share the same environment construction
+path: explicit per-run overrides, optional `:amp_sdk, :base_env` application
+config or caller-supplied base env maps, and automatic `AMP_SDK_VERSION`
+injection. Provider behavior keys such as `AMP_API_KEY`, `AMP_URL`,
+`AMP_LOG_LEVEL`, `AMP_LOG_FILE`, and `AMP_SETTINGS_FILE` are not ambiently
+forwarded by the runtime path. Pass provider behavior environment explicitly
+through `Options.env` or the typed option when applicable.
 
 Governed execution is a separate mode selected by explicit authority. It
 rejects `Options.env`, `AMP_CLI_PATH`, `AMP_API_KEY`, `AMP_URL`, log/settings
@@ -209,13 +215,18 @@ end)
 
 The SDK locates the Amp CLI by checking (in order):
 
-1. `AMP_CLI_PATH` environment variable
+1. Materialized `AMP_CLI_PATH` from `:cli_subprocess_core, :provider_cli_env`
 2. `~/.amp/bin/amp`
 3. `~/.local/bin/amp`
 4. System `PATH`
 
 This discovery order is standalone direct-use behavior only. Governed execution
 bypasses it and launches the authority-materialized command.
+
+Top-level applications that want to honor OS environment variables should read
+them in `config/runtime.exs` or another configuration boundary and put the
+resulting map in `:cli_subprocess_core, :provider_cli_env`; `amp_sdk` runtime
+modules do not call `System.get_env/1`.
 
 Use `AmpSdk.CLI.resolve/1` to inspect the command spec:
 
