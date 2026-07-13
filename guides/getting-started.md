@@ -2,7 +2,7 @@
 
 ## Prerequisites
 
-1. **Elixir 1.14+** and **OTP 26+**
+1. **Elixir 1.19+** and **OTP 26+**
 2. **Amp CLI** installed and authenticated
 
 ### Install the Amp CLI
@@ -35,7 +35,7 @@ metadata must come from the supplied governed authority.
 # mix.exs
 def deps do
   [
-    {:amp_sdk, "~> 0.5.0"}
+    {:amp_sdk, "~> 0.6.0"}
   ]
 end
 ```

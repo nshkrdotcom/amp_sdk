@@ -4,7 +4,7 @@
 
 # Amp SDK for Elixir
 
-[![Elixir](https://img.shields.io/badge/elixir-1.14+-purple.svg)](https://elixir-lang.org)
+[![Elixir](https://img.shields.io/badge/elixir-1.19+-purple.svg)](https://elixir-lang.org)
 [![OTP](https://img.shields.io/badge/otp-26+-blue.svg)](https://www.erlang.org)
 [![Hex.pm](https://img.shields.io/hexpm/v/amp_sdk.svg)](https://hex.pm/packages/amp_sdk)
 [![Documentation](https://img.shields.io/badge/docs-hexdocs-purple.svg)](https://hexdocs.pm/amp_sdk)
@@ -22,6 +22,7 @@ An idiomatic Elixir SDK for [Amp](https://ampcode.com) (by Sourcegraph) -- the a
 - `guides/streaming.md` - event flow and result handling
 - `guides/threads.md` - thread lifecycle and continuation
 - `guides/testing.md` - local validation workflow
+- `guides/migrating-to-0.6.md` - compatibility and migration notes for 0.6
 - `guides/provider_behavior_manifest.md` - evidence for Amp-native feature
   translation
 
@@ -45,7 +46,7 @@ Add `amp_sdk` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:amp_sdk, "~> 0.5.0"}
+    {:amp_sdk, "~> 0.6.0"}
   ]
 end
 ```
@@ -865,6 +866,7 @@ Full API documentation is available on [HexDocs](https://hexdocs.pm/amp_sdk).
 - [Threads](guides/threads.md) — multi-turn conversations and thread management
 - [Error Handling](guides/error-handling.md) — error kinds and recovery
 - [Testing](guides/testing.md) — unit and integration testing strategies
+- [Migrating to 0.6](guides/migrating-to-0.6.md) — compatibility and required changes
 - [Provider Behavior Manifest](guides/provider_behavior_manifest.md) — evidence for Amp-native feature translation
 
 ### Examples

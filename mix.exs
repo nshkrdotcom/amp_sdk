@@ -6,7 +6,7 @@ defmodule AmpSdk.MixProject do
   use Mix.Project
 
   @app :amp_sdk
-  @version "0.5.0"
+  @version "0.6.0"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
   @homepage_url "https://hex.pm/packages/amp_sdk"
   @docs_url "https://hexdocs.pm/amp_sdk"
@@ -15,7 +15,7 @@ defmodule AmpSdk.MixProject do
     [
       app: @app,
       version: @version,
-      elixir: "~> 1.14",
+      elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -87,6 +87,7 @@ defmodule AmpSdk.MixProject do
         {"guides/error-handling.md", title: "Error Handling"},
         {"guides/testing.md", title: "Testing"},
         {"guides/tools-and-management.md", title: "Tools And Management"},
+        {"guides/migrating-to-0.6.md", title: "Migrating to 0.6"},
         {"guides/provider_behavior_manifest.md", title: "Provider Behavior Manifest"},
         {"examples/README.md", title: "Examples", filename: "examples"},
         {"CHANGELOG.md", title: "Changelog"},
@@ -110,7 +111,7 @@ defmodule AmpSdk.MixProject do
           "guides/provider_behavior_manifest.md"
         ],
         Examples: ["examples/README.md"],
-        Reference: ["CHANGELOG.md", "LICENSE"]
+        Reference: ["guides/migrating-to-0.6.md", "CHANGELOG.md", "LICENSE"]
       ],
       groups_for_modules: [
         "Core API": [

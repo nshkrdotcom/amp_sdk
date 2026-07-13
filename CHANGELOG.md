@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-13
+
 ### Added
 
 - Added governed Amp launch support through an explicit authority object for
@@ -14,9 +16,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added governed launch tests proving authority-only command/cwd/env use and
   fail-closed rejection of native config, permissions, MCP OAuth, and env
   smuggling.
+- Added an SDK-direct promotion fixture and provider behavior manifest for
+  proving Amp-native flags, settings, management commands, and local execution
+  surfaces without importing ASM.
+- Added deterministic bounded scanners and error-kind normalization for
+  environment keys, thread tables, management payloads, and provider errors.
+- Added package-aware dependency source selection with a Hex-only publish mode
+  and a release boundary test that forbids dependencies on ASM and sibling
+  provider SDKs.
 
 ### Changed
 
+- Raised the minimum Elixir version to 1.19 and moved the shared runtime
+  dependency to `cli_subprocess_core ~> 0.2.0`; updated Zoi to the 0.18 line.
+- Command execution, sessions, process exits, transport errors, provider model
+  policy, and execution surfaces now use `CliSubprocessCore` facades. The SDK
+  continues to project those shared mechanics into Amp-native messages and
+  error values rather than exposing raw Execution Plane modules.
+- `AmpSdk.run/2`, `AmpSdk.execute/2`, management functions, public option and
+  message structs, and Amp-native permission/MCP/thread APIs retain their 0.5
+  entry points. The new governed authority option is additive.
+- Provider behavior environment values are no longer inherited ambiently by
+  runtime code. Applications must materialize OS environment values at a
+  configuration boundary and pass them through `Options.env`, the `:amp_sdk`
+  `:base_env` setting, or the shared provider CLI configuration.
 - Error kind normalization, thread table parsing, env key validation, permission
   list parsing, and MCP list parsing now use bounded literal handling and
   deterministic scanners.
@@ -24,11 +47,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and MCP OAuth state remain standalone direct-use behavior only. Governed mode
   requires authority materialization and rejects unmanaged env, native config,
   and OAuth credential options.
+- Permission actions and MCP server type/source values are validated against
+  the known Amp contract. Unknown MCP status and provider error literals are
+  preserved as diagnostic data while projecting to bounded `"unknown"`/`:unknown`
+  values.
 
 ### Fixed
 
+- Tightened command exit, timeout, retained-stderr, remote CLI, cwd, stream
+  cleanup, and error translation behavior on the shared core 0.2 runtime.
+- Preserved forward-compatible `extra` fields in typed management and message
+  projections while rejecting invalid known discriminator fields.
 - Removed pattern-engine examples from tests and guides in favor of fixed
   string checks.
+
+### Removed
+
+- Removed the SDK's residual direct dependency and test adapter for
+  `external_runtime_transport`; execution transport remains owned by
+  `cli_subprocess_core`.
+
+See [Migrating to 0.6](guides/migrating-to-0.6.md) for the compatibility audit
+and the required environment/dependency changes.
 
 ## [0.5.0] - 2026-04-06
 
@@ -179,7 +219,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Low-level transport errors can now be normalized with `AmpSdk.Transport.error_to_error/2`.
 - Timeout defaults are now centralized in the internal defaults module and reused by review/stream/transport paths.
 
-[Unreleased]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.2.0...v0.3.0
