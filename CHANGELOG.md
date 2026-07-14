@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Restricted the Hex archive to consumer-facing source, guides, examples, and
+  public documentation/assets, with a consistent 200px README presentation.
 - Raised the minimum Elixir version to 1.19 and moved the shared runtime
   dependency to `cli_subprocess_core ~> 0.2.0`; updated Zoi to the 0.18 line.
 - Command execution, sessions, process exits, transport errors, provider model

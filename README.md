@@ -4,11 +4,10 @@
 
 # Amp SDK for Elixir
 
-[![Elixir](https://img.shields.io/badge/elixir-1.19+-purple.svg)](https://elixir-lang.org)
-[![OTP](https://img.shields.io/badge/otp-26+-blue.svg)](https://www.erlang.org)
-[![Hex.pm](https://img.shields.io/hexpm/v/amp_sdk.svg)](https://hex.pm/packages/amp_sdk)
-[![Documentation](https://img.shields.io/badge/docs-hexdocs-purple.svg)](https://hexdocs.pm/amp_sdk)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/nshkrdotcom/amp_sdk/blob/main/LICENSE)
+<p align="center">
+  <a href="https://github.com/nshkrdotcom/amp_sdk"><img src="https://img.shields.io/badge/GitHub-nshkrdotcom%2Famp_sdk-24292e?logo=github" alt="GitHub"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"/></a>
+</p>
 
 An idiomatic Elixir SDK for [Amp](https://ampcode.com) (by Sourcegraph) -- the agentic coding assistant. Wraps the Amp CLI with streaming JSON output, multi-turn conversations, thread management, MCP server integration, and fine-grained permission control.
 
