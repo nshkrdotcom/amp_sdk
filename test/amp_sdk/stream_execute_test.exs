@@ -78,6 +78,20 @@ defmodule AmpSdk.StreamExecuteTest do
     TestSupport.write_executable!(dir, "amp", script)
   end
 
+  defp write_chatty_stream_stub!(dir) do
+    script = """
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    for i in $(seq 1 200); do
+      printf '{"type":"assistant_delta","delta":"tick-%s"}\\n' "$i"
+      sleep 0.01
+    done
+    """
+
+    TestSupport.write_executable!(dir, "amp", script)
+  end
+
   test "execute/2 accepts user input message lists" do
     dir = TestSupport.tmp_dir!("amp_stream_execute")
     stdin_file = Path.join(dir, "stdin.jsonl")
@@ -171,6 +185,44 @@ defmodule AmpSdk.StreamExecuteTest do
     after
       File.rm_rf(dir)
     end
+  end
+
+  test "execute/2 enforces a non-rearming total deadline under chatty output" do
+    dir = TestSupport.tmp_dir!("amp_stream_deadline")
+    amp_path = write_chatty_stream_stub!(dir)
+
+    try do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => amp_path}, fn ->
+        messages =
+          AmpSdk.execute("chatty", %Options{
+            stream_timeout_ms: 500,
+            run_deadline_ms: 60
+          })
+          |> Enum.to_list()
+
+        assert %ErrorResultMessage{kind: :run_deadline_exceeded} = List.last(messages)
+        assert List.last(messages).error =~ "total deadline"
+        assert Enum.any?(messages, &match?(%AmpSdk.Types.AssistantMessage{}, &1))
+      end)
+    after
+      File.rm_rf(dir)
+    end
+  end
+
+  test "execute/2 projects unsupported common options without resolving the CLI" do
+    TestSupport.with_env(%{"AMP_CLI_PATH" => "/definitely/missing/amp"}, fn ->
+      for options <- [
+            %Options{completion_only: true},
+            %Options{output_schema: %{"type" => "object"}}
+          ] do
+        assert [%ErrorResultMessage{} = error] =
+                 AmpSdk.execute("unsupported", options) |> Enum.to_list()
+
+        assert error.kind == :unsupported_capability
+        assert error.details["provider"] == :amp
+        assert error.details["support_state"] == :unsupported
+      end
+    end)
   end
 
   test "execute/2 preserves execution_surface through the shared stream lane" do

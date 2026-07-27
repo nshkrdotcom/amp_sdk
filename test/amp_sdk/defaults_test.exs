@@ -13,7 +13,9 @@ defmodule AmpSdk.DefaultsTest do
     assert Defaults.transport_headless_timeout_ms() == 5_000
   end
 
-  test "Options stream timeout tracks shared defaults" do
+  test "Options runtime timeouts track shared defaults" do
     assert %Options{}.stream_timeout_ms == Defaults.stream_timeout_ms()
+    assert %Options{}.run_deadline_ms == Defaults.stream_timeout_ms()
+    assert %Options{}.transport_headless_timeout_ms == Defaults.transport_headless_timeout_ms()
   end
 end

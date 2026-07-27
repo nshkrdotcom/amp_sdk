@@ -3,6 +3,7 @@ defmodule AmpSdk.ErrorNormalizeTest do
 
   alias AmpSdk.Error
   alias CliSubprocessCore.ProviderCLI.ErrorRuntimeFailure
+  alias CliSubprocessCore.ProviderFeatures.Error, as: ProviderFeatureError
 
   test "normalize/2 renders readable transport reasons" do
     error = Error.normalize({:transport, :not_connected}, kind: :transport_error)
@@ -35,5 +36,24 @@ defmodule AmpSdk.ErrorNormalizeTest do
     assert error.exit_code == 127
     assert error.details =~ "No such file or directory"
     assert error.context.destination == "ssh-target.example"
+  end
+
+  test "normalizes provider feature failures without losing typed context" do
+    core_error = %ProviderFeatureError{
+      provider: :amp,
+      feature: :completion_only,
+      option: :completion_only,
+      support_state: :unsupported
+    }
+
+    assert %Error{
+             kind: :unsupported_capability,
+             context: %{
+               provider: :amp,
+               feature: :completion_only,
+               option: :completion_only,
+               support_state: :unsupported
+             }
+           } = Error.normalize(core_error, kind: :stream_start_failed)
   end
 end

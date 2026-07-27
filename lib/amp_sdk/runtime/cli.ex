@@ -10,10 +10,12 @@ defmodule AmpSdk.Runtime.CLI do
   alias AmpSdk.{CLI, Env, Error, ErrorKind, GovernedLaunch, Types, Util}
   alias AmpSdk.Types.Options
   alias CliSubprocessCore.CommandSpec
+  alias CliSubprocessCore.EphemeralFile
   alias CliSubprocessCore.Event, as: CoreEvent
   alias CliSubprocessCore.ExecutionSurface
   alias CliSubprocessCore.Payload
   alias CliSubprocessCore.ProcessExit, as: CoreProcessExit
+  alias CliSubprocessCore.ProviderFeatures
   alias CliSubprocessCore.ProviderProfiles.Amp, as: CoreAmp
   alias CliSubprocessCore.Session
   alias CliSubprocessCore.TransportError, as: CoreTransportError
@@ -97,22 +99,20 @@ defmodule AmpSdk.Runtime.CLI do
           | {:session_event_tag, atom()}
 
   @spec start_session([start_option()]) ::
-          {:ok, pid(), %{info: map(), projection_state: map(), temp_dir: String.t() | nil}}
-          | {:error, term()}
+          {:ok, pid(), %{info: map(), projection_state: map()}} | {:error, term()}
   def start_session(opts) when is_list(opts) do
     input = Keyword.fetch!(opts, :input)
     options = opts |> Keyword.get(:options, %Options{}) |> Options.validate!()
     input_mode = input_mode(input)
 
-    with {:ok, command_spec} <- command_spec_for_options(options),
-         {:ok, settings_path, temp_dir} <- build_settings_file(options) do
+    with :ok <- require_supported_options(options),
+         {:ok, command_spec} <- command_spec_for_options(options) do
       session_opts =
         build_session_options(
           input,
           input_mode,
           options,
           command_spec,
-          settings_path,
           Keyword.take(opts, [:subscriber, :metadata, :session_event_tag])
         )
 
@@ -121,12 +121,10 @@ defmodule AmpSdk.Runtime.CLI do
           {:ok, session,
            %{
              info: info,
-             projection_state: new_projection_state(info),
-             temp_dir: temp_dir
+             projection_state: new_projection_state(info)
            }}
 
         {:error, reason} ->
-          cleanup_temp_dir(temp_dir)
           {:error, reason}
       end
     end
@@ -409,39 +407,23 @@ defmodule AmpSdk.Runtime.CLI do
       | provider_session_id: choose_session_id(session_id, state.provider_session_id)
     }
 
+    provider_raw = raw
     raw = normalize_raw_map(raw)
+    output = normalize_output(payload.output)
+    metadata = normalize_metadata(payload.metadata)
     usage = usage_from_result(payload, raw)
 
     message =
-      if truthy?(Map.get(raw, "is_error")) do
-        error_result!(%{
-          "type" => "result",
-          "subtype" => Map.get(raw, "subtype", "error_during_execution"),
-          "session_id" => session_id,
-          "is_error" => true,
-          "error" => Map.get(raw, "error", "Amp execution failed"),
-          "kind" => normalize_error_kind(Map.get(raw, "kind")),
-          "details" => Map.get(raw, "details"),
-          "exit_code" => integer_value(Map.get(raw, "exit_code")),
-          "stderr" => Map.get(raw, "stderr"),
-          "stderr_truncated?" => truthy?(Map.get(raw, "stderr_truncated?")),
-          "duration_ms" => duration_ms(payload, raw),
-          "num_turns" => num_turns(raw),
-          "usage" => usage,
-          "permission_denials" => Map.get(raw, "permission_denials")
-        })
-      else
-        result_message!(%{
-          "type" => "result",
-          "subtype" => "success",
-          "session_id" => session_id,
-          "is_error" => false,
-          "result" => Map.get(raw, "result", state.assistant_text),
-          "duration_ms" => duration_ms(payload, raw),
-          "num_turns" => num_turns(raw),
-          "usage" => usage
-        })
-      end
+      project_result_message(
+        payload,
+        raw,
+        provider_raw,
+        output,
+        metadata,
+        usage,
+        session_id,
+        state.assistant_text
+      )
 
     {prefix ++ [message], %{state | provider_session_id: session_id, result_received?: true}}
   end
@@ -483,19 +465,21 @@ defmodule AmpSdk.Runtime.CLI do
 
   def stderr_chunk(_event), do: nil
 
-  @spec build_invocation(keyword()) :: {:ok, CliSubprocessCore.Command.t()} | {:error, term()}
+  @spec build_invocation(keyword()) ::
+          {:ok, CliSubprocessCore.Command.t(), (-> :ok)} | {:error, term()}
   def build_invocation(opts) when is_list(opts) do
     input_mode = Keyword.get(opts, :input_mode, :prompt)
 
-    cond do
-      input_mode not in [:prompt, :json_input] ->
-        {:error, {:invalid_input_mode, input_mode}}
+    with :ok <- require_supported_provider_options(opts),
+         true <-
+           input_mode in [:prompt, :json_input] || {:error, {:invalid_input_mode, input_mode}} do
+      options = options_from_provider_opts(opts)
 
-      GovernedLaunch.governed?(opts) ->
-        build_governed_invocation(input_mode, opts)
-
-      true ->
-        build_standalone_invocation(input_mode, opts)
+      with {:ok, settings_path, teardown} <- build_settings_file(options) do
+        input_mode
+        |> build_materialized_invocation(opts, options, settings_path)
+        |> attach_invocation_teardown(teardown)
+      end
     end
   end
 
@@ -517,14 +501,26 @@ defmodule AmpSdk.Runtime.CLI do
 
   @doc false
   @spec build_settings_file(Options.t()) ::
-          {:ok, String.t() | nil, String.t() | nil} | {:error, Error.t()}
-  def build_settings_file(%Options{permissions: nil, skills: nil}) do
-    {:ok, nil, nil}
+          {:ok, String.t() | nil, (-> :ok)} | {:error, Error.t()}
+  def build_settings_file(%Options{settings_file: settings_file, permissions: nil, skills: nil}) do
+    {:ok, settings_file, fn -> :ok end}
   end
 
   def build_settings_file(%Options{} = options) do
-    with {:ok, merged} <- build_settings_payload(options) do
-      write_settings_file(merged)
+    with {:ok, merged} <- build_settings_payload(options),
+         {:ok, encoded} <- encode_settings(merged),
+         {:ok, path, teardown} <-
+           EphemeralFile.create(encoded, prefix: "amp_sdk_settings", suffix: ".json") do
+      {:ok, path, teardown}
+    else
+      {:error, %Error{} = error} ->
+        {:error, error}
+
+      {:error, reason} ->
+        {:error,
+         Error.new(:invalid_configuration, "Failed to materialize temporary settings",
+           cause: reason
+         )}
     end
   end
 
@@ -568,7 +564,6 @@ defmodule AmpSdk.Runtime.CLI do
          input_mode,
          %Options{} = options,
          command_spec,
-         settings_path,
          runtime_opts
        ) do
     metadata =
@@ -593,8 +588,10 @@ defmodule AmpSdk.Runtime.CLI do
       mcp_config: options.mcp_config,
       labels: options.labels,
       thinking: options.thinking,
-      settings_path: settings_path,
-      headless_timeout_ms: :infinity,
+      settings_file: options.settings_file,
+      output_schema: options.output_schema,
+      completion_only: options.completion_only,
+      transport_headless_timeout_ms: options.transport_headless_timeout_ms,
       max_stderr_buffer_size: options.max_stderr_buffer_bytes,
       permissions: options.permissions,
       skills: options.skills,
@@ -612,6 +609,44 @@ defmodule AmpSdk.Runtime.CLI do
       {:ok, nil}
     else
       CLI.resolve(options.execution_surface)
+    end
+  end
+
+  defp require_supported_options(%Options{} = options) do
+    with :ok <-
+           ProviderFeatures.require_option(
+             :amp,
+             :structured_output,
+             :output_schema,
+             options.output_schema
+           ),
+         :ok <-
+           ProviderFeatures.require_option(
+             :amp,
+             :completion_only,
+             :completion_only,
+             options.completion_only
+           ) do
+      :ok
+    end
+  end
+
+  defp require_supported_provider_options(opts) do
+    with :ok <-
+           ProviderFeatures.require_option(
+             :amp,
+             :structured_output,
+             :output_schema,
+             Keyword.get(opts, :output_schema)
+           ),
+         :ok <-
+           ProviderFeatures.require_option(
+             :amp,
+             :completion_only,
+             :completion_only,
+             Keyword.get(opts, :completion_only, false)
+           ) do
+      :ok
     end
   end
 
@@ -695,8 +730,11 @@ defmodule AmpSdk.Runtime.CLI do
       mcp_config: Keyword.get(opts, :mcp_config),
       labels: Keyword.get(opts, :labels),
       thinking: Keyword.get(opts, :thinking, false),
+      settings_file: Keyword.get(opts, :settings_file),
       permissions: Keyword.get(opts, :permissions),
       skills: Keyword.get(opts, :skills),
+      output_schema: Keyword.get(opts, :output_schema),
+      completion_only: Keyword.get(opts, :completion_only, false),
       governed_authority: Keyword.get(opts, :governed_authority),
       execution_surface: nil,
       no_ide: Keyword.get(opts, :no_ide, false),
@@ -707,22 +745,36 @@ defmodule AmpSdk.Runtime.CLI do
     |> Options.validate!()
   end
 
-  defp build_governed_invocation(input_mode, opts) do
-    options = options_from_provider_opts(opts)
-
+  defp build_governed_invocation(input_mode, opts, options, settings_path) do
     with {:ok, args} <- build_invocation_args(options, input_mode, opts) do
-      args = maybe_add_settings(args, Keyword.get(opts, :settings_path))
+      args = maybe_add_settings(args, settings_path)
       GovernedLaunch.invocation(args, opts)
     end
   end
 
-  defp build_standalone_invocation(input_mode, opts) do
+  defp build_materialized_invocation(input_mode, opts, options, settings_path) do
+    if GovernedLaunch.governed?(opts) do
+      build_governed_invocation(input_mode, opts, options, settings_path)
+    else
+      build_standalone_invocation(input_mode, opts, options, settings_path)
+    end
+  rescue
+    error -> {:error, {:invalid_option_encoding, Exception.message(error)}}
+  end
+
+  defp attach_invocation_teardown({:ok, command}, teardown),
+    do: {:ok, command, teardown}
+
+  defp attach_invocation_teardown({:error, _reason} = error, teardown) do
+    teardown.()
+    error
+  end
+
+  defp build_standalone_invocation(input_mode, opts, options, settings_path) do
     case Keyword.get(opts, :command_spec) do
       %CommandSpec{} = command_spec ->
-        options = options_from_provider_opts(opts)
-
         with {:ok, args} <- build_invocation_args(options, input_mode, opts) do
-          args = maybe_add_settings(args, Keyword.get(opts, :settings_path))
+          args = maybe_add_settings(args, settings_path)
 
           {:ok,
            CliSubprocessCore.Command.new(
@@ -865,7 +917,113 @@ defmodule AmpSdk.Runtime.CLI do
 
   defp duration_ms(_payload, raw), do: integer_value(raw["duration_ms"]) || 0
 
-  defp num_turns(raw), do: integer_value(raw["num_turns"]) || 0
+  defp num_turns(%Payload.Result{output: output}, raw) when is_map(output) do
+    integer_value(output[:num_turns] || output["num_turns"]) ||
+      integer_value(raw["num_turns"]) || 0
+  end
+
+  defp num_turns(_payload, raw), do: integer_value(raw["num_turns"]) || 0
+
+  defp normalize_output(output) when is_map(output), do: stringify_keys(output)
+  defp normalize_output(_output), do: %{}
+
+  defp normalize_metadata(metadata) when is_map(metadata), do: stringify_keys(metadata)
+  defp normalize_metadata(_metadata), do: %{}
+
+  defp output_value(output, key) when is_map(output) and is_binary(key), do: Map.get(output, key)
+  defp metadata_value(metadata, key), do: output_value(metadata, key)
+
+  defp result_error?(status, raw) do
+    status in [:failed, :error, "failed", "error"] or truthy?(Map.get(raw, "is_error"))
+  end
+
+  defp project_result_message(
+         %Payload.Result{} = payload,
+         raw,
+         provider_raw,
+         output,
+         metadata,
+         usage,
+         session_id,
+         assistant_text
+       ) do
+    if result_error?(payload.status, raw) do
+      project_error_result(payload, raw, provider_raw, output, metadata, usage, session_id)
+    else
+      project_success_result(
+        payload,
+        raw,
+        provider_raw,
+        output,
+        metadata,
+        usage,
+        session_id,
+        assistant_text
+      )
+    end
+  end
+
+  defp project_error_result(payload, raw, provider_raw, output, metadata, usage, session_id) do
+    error_result!(%{
+      "type" => "result",
+      "subtype" =>
+        metadata_value(metadata, "subtype") ||
+          Map.get(raw, "subtype", "error_during_execution"),
+      "session_id" => session_id,
+      "is_error" => true,
+      "error" => Map.get(raw, "error", "Amp execution failed"),
+      "kind" => normalize_error_kind(Map.get(raw, "kind")),
+      "details" => Map.get(raw, "details"),
+      "exit_code" => integer_value(Map.get(raw, "exit_code")),
+      "stderr" => Map.get(raw, "stderr"),
+      "stderr_truncated?" => truthy?(Map.get(raw, "stderr_truncated?")),
+      "duration_ms" => duration_ms(payload, raw),
+      "num_turns" => num_turns(payload, raw),
+      "usage" => usage,
+      "permission_denials" => output_value(output, "permission_denials"),
+      "status" => payload.status,
+      "stop_reason" => payload.stop_reason,
+      "output" => payload.output,
+      "object" => payload.object,
+      "metadata" => payload.metadata,
+      "raw" => provider_raw
+    })
+  end
+
+  defp project_success_result(
+         payload,
+         raw,
+         provider_raw,
+         output,
+         metadata,
+         usage,
+         session_id,
+         assistant_text
+       ) do
+    result_message!(%{
+      "type" => "result",
+      "subtype" => metadata_value(metadata, "subtype") || Map.get(raw, "subtype", "success"),
+      "session_id" => session_id,
+      "provider_session_id" => session_id,
+      "is_error" => false,
+      "result" => output_value(output, "result") || Map.get(raw, "result") || assistant_text,
+      "status" => payload.status,
+      "stop_reason" => payload.stop_reason,
+      "output" => payload.output,
+      "object" => payload.object,
+      "metadata" => payload.metadata,
+      "raw" => provider_raw,
+      "duration_ms" => duration_ms(payload, raw),
+      "duration_api_ms" =>
+        integer_value(output_value(output, "duration_api_ms")) ||
+          integer_value(Map.get(raw, "duration_api_ms")) || 0,
+      "num_turns" => num_turns(payload, raw),
+      "usage" => usage,
+      "cost_usd" => output_value(output, "cost_usd") || Map.get(raw, "cost_usd"),
+      "permission_denials" =>
+        output_value(output, "permission_denials") || Map.get(raw, "permission_denials")
+    })
+  end
 
   defp truthy?(value) when value in [true, "true", 1, "1", "yes", "on"], do: true
   defp truthy?(_value), do: false
@@ -1097,32 +1255,6 @@ defmodule AmpSdk.Runtime.CLI do
     |> Util.maybe_flag(options.no_jetbrains, "--no-jetbrains")
   end
 
-  defp write_settings_file(merged) do
-    case create_temp_dir() do
-      {:ok, temp_dir} ->
-        case persist_settings_file(merged, temp_dir) do
-          {:ok, settings_path} ->
-            {:ok, settings_path, temp_dir}
-
-          {:error, %Error{} = error} ->
-            cleanup_temp_dir(temp_dir)
-            {:error, error}
-        end
-
-      {:error, %Error{} = error} ->
-        {:error, error}
-    end
-  end
-
-  defp persist_settings_file(merged, temp_dir) do
-    settings_path = Path.join(temp_dir, "settings.json")
-
-    with {:ok, encoded} <- encode_settings(merged),
-         :ok <- write_settings(settings_path, encoded) do
-      {:ok, settings_path}
-    end
-  end
-
   defp encode_settings(merged) do
     case Jason.encode(merged, pretty: true) do
       {:ok, encoded} ->
@@ -1134,20 +1266,6 @@ defmodule AmpSdk.Runtime.CLI do
     end
   end
 
-  defp write_settings(settings_path, encoded) do
-    case File.write(settings_path, encoded) do
-      :ok ->
-        :ok
-
-      {:error, reason} ->
-        {:error,
-         Error.new(:invalid_configuration, "Failed to write temporary settings file",
-           cause: reason,
-           context: %{path: settings_path}
-         )}
-    end
-  end
-
   defp encode_permission(%Types.Permission{} = permission) do
     permission
     |> Map.from_struct()
@@ -1156,35 +1274,6 @@ defmodule AmpSdk.Runtime.CLI do
   end
 
   defp encode_permission(other), do: other
-
-  defp create_temp_dir do
-    System.tmp_dir!()
-    |> attempt_create_temp_dir(0)
-  end
-
-  defp attempt_create_temp_dir(_base_dir, attempts) when attempts >= 10 do
-    {:error, Error.new(:invalid_configuration, "Failed to create temporary settings directory")}
-  end
-
-  defp attempt_create_temp_dir(base_dir, attempts) do
-    suffix = Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
-    dir = Path.join(base_dir, "amp-#{suffix}")
-
-    case File.mkdir(dir) do
-      :ok ->
-        {:ok, dir}
-
-      {:error, :eexist} ->
-        attempt_create_temp_dir(base_dir, attempts + 1)
-
-      {:error, reason} ->
-        {:error,
-         Error.new(:invalid_configuration, "Failed to create temporary settings directory",
-           cause: reason,
-           context: %{dir: dir}
-         )}
-    end
-  end
 
   defp read_base_settings(nil), do: {:ok, %{}}
 
@@ -1214,7 +1303,4 @@ defmodule AmpSdk.Runtime.CLI do
 
   defp maybe_add_settings(args, nil), do: args
   defp maybe_add_settings(args, path), do: args ++ ["--settings-file", path]
-
-  defp cleanup_temp_dir(nil), do: :ok
-  defp cleanup_temp_dir(dir), do: File.rm_rf(dir)
 end

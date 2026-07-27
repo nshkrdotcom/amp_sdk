@@ -22,7 +22,8 @@ defmodule AmpSdk.Stream do
       :session_monitor_ref,
       :session_event_tag,
       :projection_state,
-      :receive_timeout_ms
+      :receive_timeout_ms,
+      :deadline_at_ms
     ]
     defstruct session: nil,
               session_ref: nil,
@@ -30,10 +31,10 @@ defmodule AmpSdk.Stream do
               session_event_tag: nil,
               projection_state: nil,
               done?: false,
-              temp_dir: nil,
               stderr: "",
               stderr_truncated?: false,
               receive_timeout_ms: @default_receive_timeout_ms,
+              deadline_at_ms: nil,
               max_stderr_buffer_bytes: @default_max_stderr_buffer_bytes
 
     @type t :: %__MODULE__{
@@ -43,10 +44,10 @@ defmodule AmpSdk.Stream do
             session_event_tag: atom(),
             projection_state: map(),
             done?: boolean(),
-            temp_dir: String.t() | nil,
             stderr: String.t(),
             stderr_truncated?: boolean(),
             receive_timeout_ms: pos_integer(),
+            deadline_at_ms: integer(),
             max_stderr_buffer_bytes: pos_integer()
           }
   end
@@ -65,20 +66,20 @@ defmodule AmpSdk.Stream do
     session_ref = make_ref()
 
     case CLI.start_session(input: input, options: options, subscriber: {self(), session_ref}) do
-      {:ok, session, %{info: info, projection_state: projection_state, temp_dir: temp_dir}} ->
+      {:ok, session, %{info: info, projection_state: projection_state}} ->
         init_session(
           session,
           session_ref,
           Map.get(info, :session_event_tag, CLI.session_event_tag()),
           projection_state,
-          temp_dir,
           input,
           options.stream_timeout_ms,
+          options.run_deadline_ms,
           options.max_stderr_buffer_bytes
         )
 
       {:error, reason} ->
-        {:error, Error.normalize(reason, kind: :stream_start_failed)}
+        {:error, normalize_start_error(reason)}
     end
   rescue
     error ->
@@ -93,9 +94,9 @@ defmodule AmpSdk.Stream do
          session_ref,
          session_event_tag,
          projection_state,
-         temp_dir,
          input,
          timeout_ms,
+         run_deadline_ms,
          max_stderr_buffer_bytes
        ) do
     session_monitor_ref = Process.monitor(session)
@@ -107,14 +108,13 @@ defmodule AmpSdk.Stream do
         session_monitor_ref: session_monitor_ref,
         session_event_tag: session_event_tag,
         projection_state: projection_state,
-        temp_dir: temp_dir,
         receive_timeout_ms: timeout_ms,
+        deadline_at_ms: monotonic_ms() + run_deadline_ms,
         max_stderr_buffer_bytes: max_stderr_buffer_bytes
       }
     else
       {:error, reason} ->
         _ = CLI.close(session)
-        cleanup_temp_dir(temp_dir)
         {:error, Error.normalize(reason, kind: :stream_start_failed)}
     end
   end
@@ -143,10 +143,12 @@ defmodule AmpSdk.Stream do
   end
 
   defp receive_next({:error, reason}) do
+    error = Error.normalize(reason)
+
     error_message =
-      build_error_result("Failed to start: #{Error.message(reason)}",
-        kind: :stream_start_failed,
-        details: %{"cause" => inspect(reason)}
+      build_error_result("Failed to start: #{error.message}",
+        kind: error.kind,
+        details: Map.merge(%{"cause" => inspect(error.cause)}, stringify_details(error.context))
       )
 
     {[error_message], {:halted}}
@@ -156,26 +158,28 @@ defmodule AmpSdk.Stream do
   defp receive_next(%State{done?: true} = state), do: {:halt, state}
 
   defp receive_next(%State{} = state) do
-    receive do
-      {event_tag, ref, {:event, %CoreEvent{} = event}}
-      when event_tag == state.session_event_tag and ref == state.session_ref ->
-        handle_core_event(event, state)
+    case receive_wait_ms(state) do
+      0 ->
+        {[deadline_error(state)], mark_done(state)}
 
-      {:DOWN, monitor_ref, :process, _pid, _reason}
-      when monitor_ref == state.session_monitor_ref ->
-        {:halt, mark_done(state)}
-    after
-      state.receive_timeout_ms ->
-        timeout_error =
-          build_error_result(
-            "Timed out after #{state.receive_timeout_ms}ms waiting for CLI output",
-            kind: :stream_timeout,
-            details: %{"timeout_ms" => state.receive_timeout_ms},
-            stderr: normalize_stderr(state.stderr),
-            stderr_truncated?: state.stderr_truncated?
-          )
+      wait_ms ->
+        receive do
+          {event_tag, ref, {:event, %CoreEvent{} = event}}
+          when event_tag == state.session_event_tag and ref == state.session_ref ->
+            handle_core_event(event, state)
 
-        {[timeout_error], mark_done(state)}
+          {:DOWN, monitor_ref, :process, _pid, _reason}
+          when monitor_ref == state.session_monitor_ref ->
+            {:halt, mark_done(state)}
+        after
+          wait_ms ->
+            error =
+              if deadline_expired?(state),
+                do: deadline_error(state),
+                else: idle_timeout_error(state)
+
+            {[error], mark_done(state)}
+        end
     end
   end
 
@@ -300,7 +304,6 @@ defmodule AmpSdk.Stream do
   defp cleanup(%State{} = state) do
     close_session_with_timeout(state.session, state.session_monitor_ref, @session_close_grace_ms)
     flush_session_messages(state.session_ref, state.session_monitor_ref, state.session_event_tag)
-    cleanup_temp_dir(state.temp_dir)
     :ok
   end
 
@@ -379,8 +382,44 @@ defmodule AmpSdk.Stream do
       :ok
   end
 
-  defp cleanup_temp_dir(nil), do: :ok
-  defp cleanup_temp_dir(temp_dir), do: File.rm_rf(temp_dir)
+  defp receive_wait_ms(%State{} = state) do
+    remaining = max(state.deadline_at_ms - monotonic_ms(), 0)
+    min(state.receive_timeout_ms, remaining)
+  end
+
+  defp deadline_expired?(%State{} = state), do: monotonic_ms() >= state.deadline_at_ms
+
+  defp deadline_error(%State{} = state) do
+    build_error_result(
+      "Amp CLI run exceeded its total deadline",
+      kind: :run_deadline_exceeded,
+      stderr: normalize_stderr(state.stderr),
+      stderr_truncated?: state.stderr_truncated?
+    )
+  end
+
+  defp idle_timeout_error(%State{} = state) do
+    build_error_result(
+      "Timed out after #{state.receive_timeout_ms}ms waiting for CLI output",
+      kind: :stream_timeout,
+      details: %{"timeout_ms" => state.receive_timeout_ms},
+      stderr: normalize_stderr(state.stderr),
+      stderr_truncated?: state.stderr_truncated?
+    )
+  end
+
+  defp monotonic_ms, do: System.monotonic_time(:millisecond)
+
+  defp normalize_start_error(%CliSubprocessCore.ProviderFeatures.Error{} = reason),
+    do: Error.normalize(reason)
+
+  defp normalize_start_error(reason), do: Error.normalize(reason, kind: :stream_start_failed)
+
+  defp stringify_details(details) when is_map(details) do
+    Map.new(details, fn {key, value} -> {to_string(key), value} end)
+  end
+
+  defp stringify_details(_details), do: %{}
 
   @spec build_args(Options.t()) :: [String.t()]
   defdelegate build_args(options), to: CLI
@@ -390,7 +429,7 @@ defmodule AmpSdk.Stream do
 
   @doc false
   @spec build_settings_file(Options.t()) ::
-          {:ok, String.t() | nil, String.t() | nil} | {:error, Error.t()}
+          {:ok, String.t() | nil, (-> :ok)} | {:error, Error.t()}
   defdelegate build_settings_file(options), to: CLI
 
   @doc false

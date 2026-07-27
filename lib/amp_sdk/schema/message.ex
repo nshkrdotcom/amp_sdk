@@ -151,12 +151,21 @@ defmodule AmpSdk.Schema.Message do
         "type" => default_trimmed_string("result"),
         "subtype" => default_trimmed_string("success"),
         "session_id" => default_trimmed_string(""),
+        "provider_session_id" => default_trimmed_string(""),
         "is_error" => Zoi.default(Zoi.optional(Zoi.nullish(Zoi.boolean())), false),
         "result" => default_trimmed_string(""),
+        "status" => Conventions.optional_any(),
+        "stop_reason" => Conventions.optional_any(),
+        "output" => Conventions.optional_any(),
+        "object" => Conventions.optional_any(),
+        "metadata" => Conventions.optional_any(),
+        "raw" => Conventions.optional_any(),
         "duration_ms" => default_non_neg_integer(0),
+        "duration_api_ms" => default_non_neg_integer(0),
         "num_turns" => default_non_neg_integer(0),
         "usage" => Conventions.optional_any(),
-        "permission_denials" => optional_string_list()
+        "cost_usd" => Conventions.optional_any(),
+        "permission_denials" => Conventions.optional_any()
       },
       unrecognized_keys: :preserve
     )

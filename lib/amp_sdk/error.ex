@@ -24,8 +24,11 @@ defmodule AmpSdk.Error do
           | :config_invalid
           | :execution_failed
           | :no_result
+          | :run_deadline_exceeded
+          | :stream_timeout
           | :task_timeout
           | :task_exit
+          | :unsupported_capability
           | :unknown
 
   @type t :: %__MODULE__{
@@ -46,6 +49,7 @@ defmodule AmpSdk.Error do
           | {:exit_code, integer() | nil}
 
   alias CliSubprocessCore.ProviderCLI.ErrorRuntimeFailure
+  alias CliSubprocessCore.ProviderFeatures.Error, as: ProviderFeatureError
   alias CliSubprocessCore.TransportError, as: CoreTransportError
 
   @spec new(kind(), String.t(), [normalize_opt()]) :: t()
@@ -94,19 +98,34 @@ defmodule AmpSdk.Error do
     from_runtime_failure(failure, opts)
   end
 
-  def normalize(reason, opts) when is_exception(reason) do
-    if CoreTransportError.match?(reason) do
-      normalize_transport_error(reason, opts)
-    else
-      kind = Keyword.get(opts, :kind, :unknown)
-      message = Keyword.get(opts, :message, Exception.message(reason))
+  def normalize(%ProviderFeatureError{} = error, opts) do
+    new(:unsupported_capability, Keyword.get(opts, :message, Exception.message(error)),
+      cause: error,
+      details: Keyword.get(opts, :details),
+      context: %{
+        provider: error.provider,
+        feature: error.feature,
+        option: error.option,
+        support_state: error.support_state
+      }
+    )
+  end
 
-      new(kind, message,
-        cause: Keyword.get(opts, :cause, reason),
-        details: Keyword.get(opts, :details),
-        context: Keyword.get(opts, :context),
-        exit_code: Keyword.get(opts, :exit_code)
-      )
+  def normalize(reason, opts) when is_exception(reason) do
+    case CoreTransportError.reason(reason) do
+      ^reason ->
+        kind = Keyword.get(opts, :kind, :unknown)
+        message = Keyword.get(opts, :message, Exception.message(reason))
+
+        new(kind, message,
+          cause: Keyword.get(opts, :cause, reason),
+          details: Keyword.get(opts, :details),
+          context: Keyword.get(opts, :context),
+          exit_code: Keyword.get(opts, :exit_code)
+        )
+
+      _transport_reason ->
+        normalize_transport_error(reason, opts)
     end
   end
 
@@ -149,13 +168,7 @@ defmodule AmpSdk.Error do
     end
   end
 
-  def normalize(reason, opts) do
-    if CoreTransportError.match?(reason) do
-      normalize_transport_error(reason, opts)
-    else
-      normalize_non_transport(reason, opts)
-    end
-  end
+  def normalize(reason, opts), do: normalize_non_transport(reason, opts)
 
   defp normalize_transport_error(error, opts) do
     kind = Keyword.get(opts, :kind, :transport_error)

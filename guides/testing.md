@@ -68,6 +68,11 @@ Tag live tests with `@tag :live` and exclude them by default. SSH-backed smoke
 tests should use a separate `:live_ssh` tag so local live CLI coverage and
 remote transport coverage can be run independently:
 
+The Amp CLI was not installed and authenticated in the 2026-07-27 release
+environment, so 0.7 makes no new live provider claim. Completion-only and
+structured-output requests remain explicitly unsupported until an authenticated
+adversarial proof can promote them.
+
 ```elixir
 # test/test_helper.exs
 ExUnit.start(exclude: [:live, :live_ssh])

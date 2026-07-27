@@ -7,6 +7,16 @@ defmodule AmpSdk.OptionsTest do
   alias CliSubprocessCore.ModelRegistry.Selection
 
   describe "Options.validate!/1" do
+    test "uses finite runtime and transport timeout defaults" do
+      options = %Options{}
+
+      assert options.stream_timeout_ms == 300_000
+      assert options.run_deadline_ms == 300_000
+      assert options.transport_headless_timeout_ms == 5_000
+      assert options.completion_only == false
+      assert options.output_schema == nil
+    end
+
     test "normalizes a supplied model_payload into the canonical selection struct" do
       {:ok, payload} = ModelRegistry.build_arg_payload(:amp, nil, [])
 
@@ -30,6 +40,16 @@ defmodule AmpSdk.OptionsTest do
     test "raises when stream_timeout_ms is not positive" do
       assert_raise ArgumentError, fn ->
         Options.validate!(%Options{stream_timeout_ms: 0})
+      end
+    end
+
+    test "raises when run_deadline_ms or transport_headless_timeout_ms is not positive" do
+      assert_raise ArgumentError, fn ->
+        Options.validate!(%Options{run_deadline_ms: 0})
+      end
+
+      assert_raise ArgumentError, fn ->
+        Options.validate!(%Options{transport_headless_timeout_ms: 0})
       end
     end
 

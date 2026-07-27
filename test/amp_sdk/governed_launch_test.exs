@@ -62,7 +62,7 @@ defmodule AmpSdk.GovernedLaunchTest do
       TestSupport.with_env(
         %{"AMP_CLI_PATH" => "/nonexistent/ambient/amp", "AMP_AUTHORITY_TOKEN" => "ambient"},
         fn ->
-          assert {:ok, "lease-token"} =
+          assert {:ok, "[REDACTED]"} =
                    Command.run(["threads", "list"],
                      governed_authority: authority,
                      trim_output: true
@@ -89,17 +89,16 @@ defmodule AmpSdk.GovernedLaunchTest do
       TestSupport.with_env(
         %{"AMP_CLI_PATH" => "/nonexistent/ambient/amp", "AMP_AUTHORITY_TOKEN" => "ambient"},
         fn ->
-          assert {:ok, session, %{info: info, temp_dir: temp_dir}} =
+          assert {:ok, session, %{info: info}} =
                    CLI.start_session(
                      input: "hello governed amp",
                      options: %Options{governed_authority: authority},
                      subscriber: {self(), session_ref}
                    )
 
-          assert info.invocation.command == stub_path
-          assert info.invocation.cwd == dir
-          assert info.invocation.env == %{"AMP_AUTHORITY_TOKEN" => "session-token"}
-          assert temp_dir == nil
+          assert info.invocation.command == "[REDACTED]"
+          assert info.invocation.cwd == "[REDACTED]"
+          assert info.invocation.env == %{"AMP_AUTHORITY_TOKEN" => "[REDACTED]"}
 
           monitor_ref = Process.monitor(session)
           assert :ok = CLI.close(session)
@@ -173,7 +172,7 @@ defmodule AmpSdk.GovernedLaunchTest do
     authority = authority(stub_path, env: %{"AMP_AUTHORITY_TOKEN" => "management-token"})
 
     try do
-      assert {:ok, "management-token"} =
+      assert {:ok, "[REDACTED]"} =
                CLIInvoke.invoke(["threads", "list"], governed_authority: authority)
     after
       File.rm_rf(dir)

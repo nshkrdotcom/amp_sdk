@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-27
+
+### Added
+
+- Added explicit `completion_only` and `output_schema` common option names with
+  typed fail-closed `:unsupported_capability` results before CLI resolution.
+- Added separate finite `run_deadline_ms` and
+  `transport_headless_timeout_ms` controls while retaining
+  `stream_timeout_ms` as the idle interval.
+- Expanded `ResultMessage` with provider session id, status, stop reason,
+  complete output, object, metadata, raw provider envelope, API duration, cost,
+  and permission denials.
+- Added the 0.7 migration guide and 2026-07-27 behavior-manifest evidence for
+  capability, lifecycle, timeout, and result contracts.
+
+### Changed
+
+- Updated the shared runtime dependency to `cli_subprocess_core ~> 0.4.0` and
+  synchronized the dependency-source helper and release graph.
+- Moved merged settings materialization into the Core session owner. Temporary
+  files are now exclusive, mode `0600`, owner monitored, and cleaned after
+  normal teardown or forced owner death.
+- Normalized the release gate to format, warnings-as-errors compilation, tests,
+  strict Credo, Dialyzer, docs, source/preflight checks, and archive inspection.
+- Refreshed README, configuration, streaming, errors, permissions, testing, and
+  provider behavior documentation for the 0.7 contracts.
+
+### Fixed
+
+- Removed the unbounded `:infinity` transport headless timeout.
+- Prevented chatty CLI output from extending the total run budget indefinitely.
+- Preserved Core Amp result fields instead of reconstructing terminal state
+  only from raw text and accumulated assistant deltas.
+- Aligned governed launch assertions with Core 0.4 authority redaction so
+  commands, working directories, environment secrets, and command output do not
+  cross the public diagnostic boundary.
+- Removed caller-owned temporary directory cleanup and its crash leak window.
+- Removed the Elixir 1.20 redundant transport-error branch warning.
+
+No installed and authenticated Amp CLI was available for this release
+environment. Completion-only and structured-output behavior therefore remain
+unsupported rather than being inferred from native flags.
+
+See [Migrating to 0.7](guides/migrating-to-0.7.md).
+
 ## [0.6.0] - 2026-07-13
 
 ### Added
@@ -221,7 +266,8 @@ and the required environment/dependency changes.
 - Low-level transport errors can now be normalized with `AmpSdk.Transport.error_to_error/2`.
 - Timeout defaults are now centralized in the internal defaults module and reused by review/stream/transport paths.
 
-[Unreleased]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.3.0...v0.4.0

@@ -7,8 +7,8 @@ defmodule AmpSdk.ReleasePreparationTest do
     project = Mix.Project.config()
     package_files = project[:package][:files]
 
-    assert project[:version] == "0.6.0"
-    assert project[:docs][:source_ref] == "v0.6.0"
+    assert project[:version] == "0.7.0"
+    assert project[:docs][:source_ref] == "v0.7.0"
     assert project[:docs][:assets] == %{"assets" => "assets"}
     assert project[:docs][:logo] == "assets/amp_sdk.svg"
 

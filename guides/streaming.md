@@ -96,6 +96,11 @@ Final outcome — the stream halts after this.
 ```elixir
 %AmpSdk.Types.ResultMessage{
   result: "The project has 12 modules.",
+  status: :completed,
+  stop_reason: "done",
+  output: %{result: "The project has 12 modules.", duration_ms: 3500},
+  metadata: %{subtype: "success"},
+  raw: %{"type" => "run_completed"},
   duration_ms: 3500,
   num_turns: 2,
   is_error: false
@@ -164,16 +169,25 @@ tool_calls =
 
 ## Timeouts
 
-Set stream timeout directly via `Options.stream_timeout_ms`:
+Amp has two independent stream limits:
+
+- `stream_timeout_ms` is the maximum idle interval between events.
+- `run_deadline_ms` is the total wall-clock budget and never rearms, even when
+  the CLI continuously emits events.
 
 ```elixir
 alias AmpSdk.Types.Options
 
-AmpSdk.execute("Long running task", %Options{stream_timeout_ms: 30_000})
+AmpSdk.execute("Long running task", %Options{
+  stream_timeout_ms: 30_000,
+  run_deadline_ms: 180_000
+})
 |> Enum.to_list()
 ```
 
-For outer cancellation boundaries, you can still wrap with `Task`:
+An idle expiry produces `kind: :stream_timeout`; a total expiry produces
+`kind: :run_deadline_exceeded`. For application-wide cancellation boundaries,
+you can still wrap with `Task`:
 
 ```elixir
 task = Task.async(fn ->

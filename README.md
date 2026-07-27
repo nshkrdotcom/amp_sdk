@@ -2,12 +2,12 @@
   <img src="assets/amp_sdk.svg" alt="Amp SDK for Elixir" width="200" height="200">
 </p>
 
-# Amp SDK for Elixir
-
 <p align="center">
   <a href="https://github.com/nshkrdotcom/amp_sdk"><img src="https://img.shields.io/badge/GitHub-nshkrdotcom%2Famp_sdk-24292e?logo=github" alt="GitHub"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"/></a>
 </p>
+
+# Amp SDK for Elixir
 
 An idiomatic Elixir SDK for [Amp](https://ampcode.com) (by Sourcegraph) -- the agentic coding assistant. Wraps the Amp CLI with streaming JSON output, multi-turn conversations, thread management, MCP server integration, and fine-grained permission control.
 
@@ -21,7 +21,7 @@ An idiomatic Elixir SDK for [Amp](https://ampcode.com) (by Sourcegraph) -- the a
 - `guides/streaming.md` - event flow and result handling
 - `guides/threads.md` - thread lifecycle and continuation
 - `guides/testing.md` - local validation workflow
-- `guides/migrating-to-0.6.md` - compatibility and migration notes for 0.6
+- `guides/migrating-to-0.7.md` - capability, timeout, and result migration notes
 - `guides/provider_behavior_manifest.md` - evidence for Amp-native feature
   translation
 
@@ -45,7 +45,7 @@ Add `amp_sdk` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:amp_sdk, "~> 0.6.0"}
+    {:amp_sdk, "~> 0.7.0"}
   ]
 end
 ```
@@ -313,9 +313,13 @@ All execution behavior is controlled through `AmpSdk.Types.Options`:
   permissions: nil,                   # List of Permission structs
   labels: nil,                        # Thread labels (max 20, alphanumeric + hyphens)
   thinking: false,                    # Use --stream-json-thinking when prompt is a string
+  completion_only: false,             # Unsupported: true fails before CLI lookup
+  output_schema: nil,                 # Unsupported: non-nil fails before CLI lookup
   model_payload: nil,                 # Shared core Selection (or a canonicalizable map form)
   execution_surface: nil,             # Optional ExecutionSurface struct, map, or keyword
-  stream_timeout_ms: 300_000,         # Receive timeout for stream events
+  stream_timeout_ms: 300_000,         # Idle receive timeout; output rearms it
+  run_deadline_ms: 300_000,            # Total non-rearming execution deadline
+  transport_headless_timeout_ms: 5_000,# Finite orphan-reap window
   no_ide: false,                      # Disable IDE context injection
   no_notifications: false,            # Disable notification sounds
   no_color: false,                    # Disable ANSI colors
@@ -512,17 +516,28 @@ Tool results fed back to the agent automatically.
 
 ### `ResultMessage`
 
-Successful completion. Includes total usage and timing.
+Successful completion. The projection preserves the normalized Core result as
+well as Amp-native raw data; `result` remains the convenient text field.
 
 ```elixir
 %ResultMessage{
   type: "result",
   subtype: "success",
+  session_id: "T-...",
+  provider_session_id: "T-...",
   is_error: false,
   result: "I've updated the module with...",
+  status: :completed,
+  stop_reason: "done",
+  output: %{result: "...", duration_ms: 12450, ...},
+  object: nil,
+  metadata: %{subtype: "success", provider_status: "completed"},
+  raw: %{"type" => "run_completed", ...},
   duration_ms: 12450,
+  duration_api_ms: 12000,
   num_turns: 3,
   usage: %Usage{input_tokens: 8192, output_tokens: 2048},
+  cost_usd: 0.12,
   permission_denials: nil
 }
 ```
@@ -865,7 +880,8 @@ Full API documentation is available on [HexDocs](https://hexdocs.pm/amp_sdk).
 - [Threads](guides/threads.md) — multi-turn conversations and thread management
 - [Error Handling](guides/error-handling.md) — error kinds and recovery
 - [Testing](guides/testing.md) — unit and integration testing strategies
-- [Migrating to 0.6](guides/migrating-to-0.6.md) — compatibility and required changes
+- [Migrating to 0.7](guides/migrating-to-0.7.md) — capability, timeout, lifecycle, and result changes
+- [Migrating to 0.6](guides/migrating-to-0.6.md) — prior compatibility changes
 - [Provider Behavior Manifest](guides/provider_behavior_manifest.md) — evidence for Amp-native feature translation
 
 ### Examples

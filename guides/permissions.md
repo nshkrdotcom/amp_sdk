@@ -64,9 +64,10 @@ permissions = [
 
 When permissions are provided, the SDK:
 
-1. Creates a temporary `settings.json` file containing the permission rules
+1. Creates an exclusive owner-tracked temporary `settings.json` file containing
+   the permission rules, with mode `0600`
 2. Passes `--settings-file <path>` to the CLI
-3. Cleans up the temp file after execution completes
+3. Cleans up that one file after success, failure, close, or forced owner death
 
 If you also provide a `settings_file` in Options, the SDK merges your permissions into that file's contents.
 

@@ -746,12 +746,21 @@ defmodule AmpSdk.Types do
             type: String.t(),
             subtype: String.t(),
             session_id: String.t(),
+            provider_session_id: String.t(),
             is_error: boolean(),
             result: String.t(),
+            status: term(),
+            stop_reason: term(),
+            output: term(),
+            object: term(),
+            metadata: map(),
+            raw: term(),
             duration_ms: non_neg_integer(),
+            duration_api_ms: non_neg_integer(),
             num_turns: non_neg_integer(),
             usage: Usage.t() | nil,
-            permission_denials: [String.t()] | nil,
+            cost_usd: number() | nil,
+            permission_denials: term(),
             extra: map()
           }
 
@@ -762,11 +771,20 @@ defmodule AmpSdk.Types do
       "type",
       "subtype",
       "session_id",
+      "provider_session_id",
       "is_error",
       "result",
+      "status",
+      "stop_reason",
+      "output",
+      "object",
+      "metadata",
+      "raw",
       "duration_ms",
+      "duration_api_ms",
       "num_turns",
       "usage",
+      "cost_usd",
       "permission_denials"
     ]
     @schema Message.result_message()
@@ -774,11 +792,20 @@ defmodule AmpSdk.Types do
     defstruct type: "result",
               subtype: "success",
               session_id: "",
+              provider_session_id: "",
               is_error: false,
               result: "",
+              status: nil,
+              stop_reason: nil,
+              output: nil,
+              object: nil,
+              metadata: %{},
+              raw: nil,
               duration_ms: 0,
+              duration_api_ms: 0,
               num_turns: 0,
               usage: nil,
+              cost_usd: nil,
               permission_denials: nil,
               extra: %{}
 
@@ -797,11 +824,20 @@ defmodule AmpSdk.Types do
              type: Map.get(known, "type", "result"),
              subtype: Map.get(known, "subtype", "success"),
              session_id: Map.get(known, "session_id", ""),
+             provider_session_id: Map.get(known, "provider_session_id", ""),
              is_error: Map.get(known, "is_error", false),
              result: Map.get(known, "result", ""),
+             status: Map.get(known, "status"),
+             stop_reason: Map.get(known, "stop_reason"),
+             output: Map.get(known, "output"),
+             object: Map.get(known, "object"),
+             metadata: Map.get(known, "metadata") || %{},
+             raw: Map.get(known, "raw"),
              duration_ms: Map.get(known, "duration_ms", 0),
+             duration_api_ms: Map.get(known, "duration_api_ms", 0),
              num_turns: Map.get(known, "num_turns", 0),
              usage: Usage.parse!(Map.get(known, "usage")),
+             cost_usd: Map.get(known, "cost_usd"),
              permission_denials: Map.get(known, "permission_denials"),
              extra: extra
            }}
@@ -822,11 +858,20 @@ defmodule AmpSdk.Types do
         type: Map.get(known, "type", "result"),
         subtype: Map.get(known, "subtype", "success"),
         session_id: Map.get(known, "session_id", ""),
+        provider_session_id: Map.get(known, "provider_session_id", ""),
         is_error: Map.get(known, "is_error", false),
         result: Map.get(known, "result", ""),
+        status: Map.get(known, "status"),
+        stop_reason: Map.get(known, "stop_reason"),
+        output: Map.get(known, "output"),
+        object: Map.get(known, "object"),
+        metadata: Map.get(known, "metadata") || %{},
+        raw: Map.get(known, "raw"),
         duration_ms: Map.get(known, "duration_ms", 0),
+        duration_api_ms: Map.get(known, "duration_api_ms", 0),
         num_turns: Map.get(known, "num_turns", 0),
         usage: Usage.parse!(Map.get(known, "usage")),
+        cost_usd: Map.get(known, "cost_usd"),
         permission_denials: Map.get(known, "permission_denials"),
         extra: extra
       }
@@ -1206,6 +1251,8 @@ defmodule AmpSdk.Types do
     permissions, MCP, OAuth, and execution-surface overrides are rejected.
     """
     @stream_timeout_ms AmpSdk.Defaults.stream_timeout_ms()
+    @run_deadline_ms AmpSdk.Defaults.stream_timeout_ms()
+    @transport_headless_timeout_ms AmpSdk.Defaults.transport_headless_timeout_ms()
     alias AmpSdk.GovernedLaunch
     alias CliSubprocessCore.{ExecutionSurface, ModelInput}
 
@@ -1225,10 +1272,14 @@ defmodule AmpSdk.Types do
             permissions: [Permission.t()] | nil,
             labels: [String.t()] | nil,
             thinking: boolean(),
+            completion_only: boolean(),
+            output_schema: map() | nil,
             model_payload: CliSubprocessCore.ModelRegistry.selection() | map() | nil,
             execution_surface: ExecutionSurface.t() | map() | keyword() | nil,
             governed_authority: CliSubprocessCore.GovernedAuthority.t() | map() | keyword() | nil,
             stream_timeout_ms: pos_integer(),
+            run_deadline_ms: pos_integer(),
+            transport_headless_timeout_ms: pos_integer(),
             max_stderr_buffer_bytes: pos_integer(),
             no_ide: boolean(),
             no_notifications: boolean(),
@@ -1250,10 +1301,14 @@ defmodule AmpSdk.Types do
               permissions: nil,
               labels: nil,
               thinking: false,
+              completion_only: false,
+              output_schema: nil,
               model_payload: nil,
               execution_surface: nil,
               governed_authority: nil,
               stream_timeout_ms: @stream_timeout_ms,
+              run_deadline_ms: @run_deadline_ms,
+              transport_headless_timeout_ms: @transport_headless_timeout_ms,
               max_stderr_buffer_bytes: AmpSdk.Defaults.stream_max_stderr_buffer_bytes(),
               no_ide: false,
               no_notifications: false,
@@ -1264,6 +1319,8 @@ defmodule AmpSdk.Types do
     def validate!(%__MODULE__{} = options) do
       options
       |> validate_positive_integer!(:stream_timeout_ms)
+      |> validate_positive_integer!(:run_deadline_ms)
+      |> validate_positive_integer!(:transport_headless_timeout_ms)
       |> validate_positive_integer!(:max_stderr_buffer_bytes)
       |> GovernedLaunch.validate_options!()
       |> normalize_model_payload!()

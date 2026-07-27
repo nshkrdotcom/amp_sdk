@@ -29,13 +29,25 @@ For model selection specifically, Amp is payload-only in this repo today:
 | `permissions` | `[Permission.t()]` | `nil` | Permission rules |
 | `labels` | `[String.t()]` | `nil` | Thread labels (max 20) |
 | `thinking` | `boolean()` | `false` | Use `--stream-json-thinking` for string prompts |
+| `completion_only` | `boolean()` | `false` | Common completion-only intent; `true` is currently rejected as unsupported before CLI lookup |
+| `output_schema` | `map() \| nil` | `nil` | Common structured-output intent; non-`nil` is currently rejected as unsupported before CLI lookup |
 | `model_payload` | `Selection.t() \| map() \| nil` | `nil` | Shared core model-selection payload |
 | `execution_surface` | `ExecutionSurface.t() \| map() \| keyword() \| nil` | `nil` | Shared core execution surface for local or SSH placement |
-| `stream_timeout_ms` | `pos_integer()` | `300_000` | Stream receive timeout in milliseconds |
+| `stream_timeout_ms` | `pos_integer()` | `300_000` | Idle receive timeout; each event rearms it |
+| `run_deadline_ms` | `pos_integer()` | `300_000` | Total non-rearming run deadline |
+| `transport_headless_timeout_ms` | `pos_integer()` | `5_000` | Finite transport orphan-reap window |
 | `no_ide` | `boolean()` | `false` | Disable IDE context injection (`--no-ide`) |
 | `no_notifications` | `boolean()` | `false` | Disable sound notifications (`--no-notifications`) |
 | `no_color` | `boolean()` | `false` | Disable ANSI colors (`--no-color`) |
 | `no_jetbrains` | `boolean()` | `false` | Disable JetBrains integration (`--no-jetbrains`) |
+
+## Common Capability Requests
+
+Amp 0.7 exposes `completion_only` and `output_schema` so callers can use the
+same option vocabulary across provider SDKs. Neither capability has a verified
+Amp CLI contract in this release. A requested value therefore returns a typed
+`:unsupported_capability` error before command discovery, authentication, or
+subprocess startup. Ordinary Amp execution is unchanged.
 
 ## Shared Core Model Payload
 

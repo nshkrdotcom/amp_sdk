@@ -172,13 +172,30 @@ defmodule AmpSdk.TypesTest do
           session_id: "T-123",
           is_error: false,
           result: "done",
+          provider_session_id: "T-123",
+          status: "completed",
+          stop_reason: "done",
+          output: %{result: "done", duration_api_ms: 1400},
+          object: nil,
+          metadata: %{provider_status: "completed"},
+          raw: %{type: "run_completed"},
           duration_ms: 1500,
+          duration_api_ms: 1400,
+          cost_usd: 0.02,
           num_turns: 3
         })
 
       assert {:ok, %ResultMessage{} = msg} = Types.parse_stream_message(json)
       assert msg.result == "done"
+      assert msg.provider_session_id == "T-123"
+      assert msg.status == "completed"
+      assert msg.stop_reason == "done"
+      assert msg.output == %{"duration_api_ms" => 1400, "result" => "done"}
+      assert msg.metadata == %{"provider_status" => "completed"}
+      assert msg.raw == %{"type" => "run_completed"}
       assert msg.duration_ms == 1500
+      assert msg.duration_api_ms == 1400
+      assert msg.cost_usd == 0.02
       assert msg.num_turns == 3
       assert msg.is_error == false
     end
@@ -363,6 +380,10 @@ defmodule AmpSdk.TypesTest do
       assert opts.dangerously_allow_all == false
       assert opts.env == %{}
       assert opts.stream_timeout_ms == 300_000
+      assert opts.run_deadline_ms == 300_000
+      assert opts.transport_headless_timeout_ms == 5_000
+      assert opts.completion_only == false
+      assert opts.output_schema == nil
     end
   end
 end

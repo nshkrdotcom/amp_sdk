@@ -45,7 +45,7 @@ defmodule AmpSdk.Runtime.CLITest do
 
       try do
         TestSupport.with_env(%{"AMP_CLI_PATH" => stub_path}, fn ->
-          assert {:ok, session, %{info: info, temp_dir: temp_dir}} =
+          assert {:ok, session, %{info: info}} =
                    CLI.start_session(
                      input: "hello from runtime",
                      options: options,
@@ -85,13 +85,13 @@ defmodule AmpSdk.Runtime.CLITest do
           settings_path = Enum.at(args, settings_idx + 1)
           assert is_binary(settings_path)
           assert File.exists?(settings_path)
-          assert String.starts_with?(settings_path, temp_dir)
+          assert Path.dirname(settings_path) == System.tmp_dir!()
+          assert File.stat!(settings_path).mode |> Bitwise.band(0o777) == 0o600
 
           session_monitor_ref = Process.monitor(session)
           assert :ok = CLI.close(session)
           assert_receive {:DOWN, ^session_monitor_ref, :process, ^session, :normal}, 2_000
-
-          File.rm_rf!(temp_dir)
+          assert TestSupport.wait_until(fn -> not File.exists?(settings_path) end, 1_000) == :ok
         end)
       after
         File.rm_rf(dir)
@@ -120,7 +120,7 @@ defmodule AmpSdk.Runtime.CLITest do
       }
 
       try do
-        assert {:ok, session, %{info: info, temp_dir: temp_dir}} =
+        assert {:ok, session, %{info: info}} =
                  CLI.start_session(
                    input: "hello over ssh",
                    options: options,
@@ -134,8 +134,6 @@ defmodule AmpSdk.Runtime.CLITest do
 
         assert FakeSSH.wait_until_written(fake_ssh, 1_000) == :ok
         assert FakeSSH.read_manifest!(fake_ssh) =~ "destination=runtime.ssh.example"
-        assert temp_dir == nil
-
         session_monitor_ref = Process.monitor(session)
         assert :ok = CLI.close(session)
         assert_receive {:DOWN, ^session_monitor_ref, :process, ^session, :normal}, 2_000
@@ -178,6 +176,50 @@ defmodule AmpSdk.Runtime.CLITest do
         File.rm_rf(dir)
       end
     end
+
+    test "removes owner-tracked settings when the core session is killed" do
+      dir = TestSupport.tmp_dir!("amp_runtime_settings_owner")
+      stub_path = write_runtime_stub!(dir)
+
+      try do
+        TestSupport.with_env(%{"AMP_CLI_PATH" => stub_path}, fn ->
+          assert {:ok, session, %{info: info}} =
+                   CLI.start_session(
+                     input: "owner cleanup",
+                     options: %Options{permissions: [Permission.new!("Bash", "ask")]},
+                     subscriber: {self(), make_ref()}
+                   )
+
+          settings_idx = Enum.find_index(info.invocation.args, &(&1 == "--settings-file"))
+          settings_path = Enum.at(info.invocation.args, settings_idx + 1)
+
+          assert File.exists?(settings_path)
+          assert File.stat!(settings_path).mode |> Bitwise.band(0o777) == 0o600
+
+          monitor_ref = Process.monitor(session)
+          Process.exit(session, :kill)
+          assert_receive {:DOWN, ^monitor_ref, :process, ^session, :killed}, 2_000
+          assert TestSupport.wait_until(fn -> not File.exists?(settings_path) end, 1_000) == :ok
+        end)
+      after
+        File.rm_rf(dir)
+      end
+    end
+
+    test "rejects unsupported common options before CLI resolution" do
+      TestSupport.with_env(%{"AMP_CLI_PATH" => "/definitely/missing/amp"}, fn ->
+        assert {:error, %CliSubprocessCore.ProviderFeatures.Error{} = error} =
+                 CLI.start_session(
+                   input: "unsupported",
+                   options: %Options{completion_only: true}
+                 )
+
+        assert error.provider == :amp
+        assert error.feature == :completion_only
+        assert error.option == :completion_only
+        assert error.support_state == :unsupported
+      end)
+    end
   end
 
   describe "Profile.transport_options/1" do
@@ -186,6 +228,16 @@ defmodule AmpSdk.Runtime.CLITest do
 
       assert CLI.Profile.transport_options(input_mode: :json_input)[:close_stdin_on_start?] ==
                false
+    end
+
+    test "threads the declared finite orphan-reap timeout to the transport" do
+      transport_options =
+        CLI.Profile.transport_options(
+          input_mode: :prompt,
+          transport_headless_timeout_ms: 25
+        )
+
+      assert transport_options[:headless_timeout_ms] == 25
     end
   end
 
@@ -312,7 +364,17 @@ defmodule AmpSdk.Runtime.CLITest do
             Payload.Result.new(
               status: :completed,
               stop_reason: "done",
-              output: %{duration_ms: 300, usage: %{input_tokens: 7, output_tokens: 9}}
+              output: %{
+                result: "provider-result",
+                duration_ms: 300,
+                duration_api_ms: 250,
+                num_turns: 2,
+                usage: %{input_tokens: 7, output_tokens: 9, total_tokens: 16},
+                cost_usd: 0.42,
+                permission_denials: [%{tool: "Bash", reason: "policy"}]
+              },
+              object: nil,
+              metadata: %{subtype: "success", provider_status: "completed"}
             )
         )
 
@@ -320,11 +382,21 @@ defmodule AmpSdk.Runtime.CLITest do
 
       assert %Types.ResultMessage{
                session_id: "amp-session-1",
-               result: "Hello",
+               provider_session_id: "amp-session-1",
+               result: "provider-result",
+               status: :completed,
+               stop_reason: "done",
                duration_ms: 300,
+               duration_api_ms: 250,
                num_turns: 2,
-               usage: %Types.Usage{input_tokens: 7, output_tokens: 9}
+               usage: %Types.Usage{input_tokens: 7, output_tokens: 9},
+               cost_usd: 0.42,
+               permission_denials: [%{"tool" => "Bash", "reason" => "policy"}],
+               metadata: %{subtype: "success", provider_status: "completed"},
+               raw: %{"type" => "run_completed"}
              } = result_message
+
+      assert result_message.output.result == "provider-result"
     end
 
     test "projects parse and transport exit failures into Amp error result messages" do

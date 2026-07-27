@@ -76,9 +76,11 @@ defmodule AmpSdk.StreamTest do
   end
 
   describe "build_settings_file/1" do
-    test "returns nil paths when permissions and skills are absent" do
-      assert {:ok, nil, nil} =
+    test "returns a no-op teardown when no settings are requested" do
+      assert {:ok, nil, teardown} =
                AmpStream.build_settings_file(%Options{permissions: nil, skills: nil})
+
+      assert :ok = teardown.()
     end
 
     test "merges base settings with permissions and skills" do
@@ -93,11 +95,12 @@ defmodule AmpSdk.StreamTest do
         permissions: [Permission.new!("Bash", "ask")]
       }
 
-      {:ok, merged_path, temp_dir} = AmpStream.build_settings_file(opts)
+      {:ok, merged_path, teardown} = AmpStream.build_settings_file(opts)
 
       try do
         assert File.exists?(merged_path)
-        assert String.starts_with?(temp_dir, System.tmp_dir!())
+        assert Path.dirname(merged_path) == System.tmp_dir!()
+        assert File.stat!(merged_path).mode |> Bitwise.band(0o777) == 0o600
 
         merged = merged_path |> File.read!() |> Jason.decode!()
         assert merged["existing"] == true
@@ -105,14 +108,15 @@ defmodule AmpSdk.StreamTest do
         assert [%{"tool" => "Bash", "action" => "ask"}] = merged["amp.permissions"]
       after
         File.rm_rf(base_dir)
-        File.rm_rf(temp_dir)
+        assert :ok = teardown.()
+        refute File.exists?(merged_path)
       end
     end
 
     test "cleans temp dir when settings serialization fails" do
       existing_temp_dirs =
         System.tmp_dir!()
-        |> Path.join("amp-*")
+        |> Path.join("amp_sdk_settings_*")
         |> Path.wildcard()
         |> MapSet.new()
 
@@ -125,7 +129,7 @@ defmodule AmpSdk.StreamTest do
 
       new_temp_dirs =
         System.tmp_dir!()
-        |> Path.join("amp-*")
+        |> Path.join("amp_sdk_settings_*")
         |> Path.wildcard()
         |> MapSet.new()
 

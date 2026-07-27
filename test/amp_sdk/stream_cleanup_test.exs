@@ -80,7 +80,7 @@ defmodule AmpSdk.StreamCleanupTest do
 
     existing_temp_dirs =
       System.tmp_dir!()
-      |> Path.join("amp-*")
+      |> Path.join("amp_sdk_settings_*")
       |> Path.wildcard()
       |> MapSet.new()
 
@@ -115,7 +115,7 @@ defmodule AmpSdk.StreamCleanupTest do
 
         new_temp_dirs =
           System.tmp_dir!()
-          |> Path.join("amp-*")
+          |> Path.join("amp_sdk_settings_*")
           |> Path.wildcard()
           |> MapSet.new()
 

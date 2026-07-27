@@ -6,7 +6,7 @@ defmodule AmpSdk.MixProject do
   use Mix.Project
 
   @app :amp_sdk
-  @version "0.6.0"
+  @version "0.7.0"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
   @homepage_url "https://hex.pm/packages/amp_sdk"
   @docs_url "https://hexdocs.pm/amp_sdk"
@@ -87,6 +87,7 @@ defmodule AmpSdk.MixProject do
         {"guides/error-handling.md", title: "Error Handling"},
         {"guides/testing.md", title: "Testing"},
         {"guides/tools-and-management.md", title: "Tools And Management"},
+        {"guides/migrating-to-0.7.md", title: "Migrating to 0.7"},
         {"guides/migrating-to-0.6.md", title: "Migrating to 0.6"},
         {"guides/provider_behavior_manifest.md", title: "Provider Behavior Manifest"},
         {"examples/README.md", title: "Examples", filename: "examples"},
@@ -111,7 +112,12 @@ defmodule AmpSdk.MixProject do
           "guides/provider_behavior_manifest.md"
         ],
         Examples: ["examples/README.md"],
-        Reference: ["guides/migrating-to-0.6.md", "CHANGELOG.md", "LICENSE"]
+        Reference: [
+          "guides/migrating-to-0.7.md",
+          "guides/migrating-to-0.6.md",
+          "CHANGELOG.md",
+          "LICENSE"
+        ]
       ],
       groups_for_modules: [
         "Core API": [
@@ -209,6 +215,7 @@ defmodule AmpSdk.MixProject do
         "Hex" => @homepage_url,
         "HexDocs" => @docs_url,
         "Amp" => "https://ampcode.com",
+        "License" => "#{@source_url}/blob/main/LICENSE",
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       },
       maintainers: ["nshkrdotcom"],
@@ -238,8 +245,9 @@ defmodule AmpSdk.MixProject do
       ci: [
         "format --check-formatted",
         "compile --warnings-as-errors",
+        "test",
         "credo --strict",
-        "test"
+        "dialyzer"
       ]
     ]
   end

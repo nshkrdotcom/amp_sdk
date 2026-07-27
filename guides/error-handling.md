@@ -19,7 +19,10 @@ case AmpSdk.run("do something") do
 end
 ```
 
-Common `kind` values include `:cli_not_found`, `:command_timeout`, `:task_timeout`, `:command_failed`, `:execution_failed`, and `:invalid_configuration`.
+Common `kind` values include `:cli_not_found`, `:command_timeout`,
+`:stream_timeout`, `:run_deadline_exceeded`, `:unsupported_capability`,
+`:task_timeout`, `:command_failed`, `:execution_failed`, and
+`:invalid_configuration`.
 
 ## Exception Types
 
@@ -65,14 +68,22 @@ end)
 
 ## Timeout Handling
 
-Use `Options.stream_timeout_ms` for stream receive timeout control:
+Use `Options.stream_timeout_ms` for idle receive control and
+`Options.run_deadline_ms` for a non-rearming total limit:
 
 ```elixir
 alias AmpSdk.Types.Options
 
-AmpSdk.execute("slow task", %Options{stream_timeout_ms: 30_000})
+AmpSdk.execute("slow task", %Options{
+  stream_timeout_ms: 30_000,
+  run_deadline_ms: 180_000
+})
 |> Enum.to_list()
 ```
+
+Requests for `completion_only: true` or a non-`nil` `output_schema` fail before
+CLI resolution with `kind: :unsupported_capability`. The error details retain
+the Core `provider`, `feature`, `option`, and `support_state` fields.
 
 You can still wrap long-running calls in a `Task` if you need outer cancellation:
 
