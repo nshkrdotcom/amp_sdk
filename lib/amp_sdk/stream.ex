@@ -419,8 +419,6 @@ defmodule AmpSdk.Stream do
     Map.new(details, fn {key, value} -> {to_string(key), value} end)
   end
 
-  defp stringify_details(_details), do: %{}
-
   @spec build_args(Options.t()) :: [String.t()]
   defdelegate build_args(options), to: CLI
 

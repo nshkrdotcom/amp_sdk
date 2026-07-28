@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cross the public diagnostic boundary.
 - Removed caller-owned temporary directory cleanup and its crash leak window.
 - Removed the Elixir 1.20 redundant transport-error branch warning.
+- Removed an unreachable non-map error-context fallback after error
+  normalization, keeping the clean-build Dialyzer release gate green.
 
 No installed and authenticated Amp CLI was available for this release
 environment. Completion-only and structured-output behavior therefore remain
