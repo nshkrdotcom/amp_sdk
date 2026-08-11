@@ -1,9 +1,17 @@
-unless Code.ensure_loaded?(DependencySources) do
-  Code.require_file("build_support/dependency_sources.exs", __DIR__)
+# `build_support/` is not shipped in the published package, so its absence is
+# how this file knows it is running inside a consumer's deps/ rather than in a
+# source checkout. Guard on the file, not on a directory shape: a shape test
+# breaks when the repo is vendored at a different depth or used as a git dep.
+workspace_helper = Path.expand("build_support/dependency_sources.exs", __DIR__)
+
+if File.regular?(workspace_helper) and not Code.ensure_loaded?(DependencySources) do
+  Code.require_file(workspace_helper)
 end
 
 defmodule AmpSdk.MixProject do
   use Mix.Project
+
+  @workspace_checkout? File.regular?(Path.expand("build_support/dependency_sources.exs", __DIR__))
 
   @app :amp_sdk
   @version "0.7.0"
@@ -61,7 +69,7 @@ defmodule AmpSdk.MixProject do
   end
 
   defp cli_subprocess_core_dep do
-    DependencySources.dep(:cli_subprocess_core, __DIR__)
+    workspace_dep(:cli_subprocess_core, "~> 0.4.0")
   end
 
   defp description do
@@ -205,6 +213,18 @@ defmodule AmpSdk.MixProject do
   defp before_closing_body_tag(:html), do: ""
   defp before_closing_body_tag(:epub), do: ""
 
+
+  # In a source checkout the registry decides the source (path first). In a
+  # published package there is no registry, and the requirement stated here is
+  # the whole answer.
+  defp workspace_dep(app, hex_requirement, opts \\ []) do
+    if @workspace_checkout? do
+      apply(DependencySources, :dep, [app, __DIR__, opts])
+    else
+      if opts == [], do: {app, hex_requirement}, else: {app, hex_requirement, opts}
+    end
+  end
+
   defp package do
     [
       name: "amp_sdk",
@@ -219,7 +239,7 @@ defmodule AmpSdk.MixProject do
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       },
       maintainers: ["nshkrdotcom"],
-      files: ~w(lib assets build_support mix.exs README.md LICENSE CHANGELOG.md examples guides),
+      files: ~w(lib assets mix.exs README.md LICENSE CHANGELOG.md examples guides),
       exclude_patterns: [
         "**/_build/**",
         "**/deps/**",
