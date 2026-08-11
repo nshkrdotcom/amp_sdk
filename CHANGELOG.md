@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-11
+
+### Changed
+
+- Updated the runtime boundary to `cli_subprocess_core ~> 0.7.0`, making the
+  SDK compatible with the current Agent Session Manager dependency graph.
+- Release checks now prove that repository-only `build_support` tooling is
+  excluded from the published package.
+
 ## [0.7.0] - 2026-07-27
 
 ### Added
@@ -268,7 +277,8 @@ and the required environment/dependency changes.
 - Low-level transport errors can now be normalized with `AmpSdk.Transport.error_to_error/2`.
 - Timeout defaults are now centralized in the internal defaults module and reused by review/stream/transport paths.
 
-[Unreleased]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nshkrdotcom/amp_sdk/compare/v0.4.0...v0.5.0

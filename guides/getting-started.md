@@ -35,7 +35,7 @@ metadata must come from the supplied governed authority.
 # mix.exs
 def deps do
   [
-    {:amp_sdk, "~> 0.7.0"}
+    {:amp_sdk, "~> 0.8.0"}
   ]
 end
 ```

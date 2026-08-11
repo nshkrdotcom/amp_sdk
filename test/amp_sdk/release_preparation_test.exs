@@ -7,15 +7,17 @@ defmodule AmpSdk.ReleasePreparationTest do
     project = Mix.Project.config()
     package_files = project[:package][:files]
 
-    assert project[:version] == "0.7.0"
-    assert project[:docs][:source_ref] == "v0.7.0"
+    assert project[:version] == "0.8.0"
+    assert project[:docs][:source_ref] == "v0.8.0"
     assert project[:docs][:assets] == %{"assets" => "assets"}
     assert project[:docs][:logo] == "assets/amp_sdk.svg"
 
     for required <-
-          ~w(lib assets build_support guides examples mix.exs README.md LICENSE CHANGELOG.md) do
+          ~w(lib assets guides examples mix.exs README.md LICENSE CHANGELOG.md) do
       assert required in package_files
     end
+
+    refute "build_support" in package_files
 
     refute ".formatter.exs" in package_files
   end

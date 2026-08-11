@@ -14,7 +14,7 @@ defmodule AmpSdk.MixProject do
   @workspace_checkout? File.regular?(Path.expand("build_support/dependency_sources.exs", __DIR__))
 
   @app :amp_sdk
-  @version "0.7.0"
+  @version "0.8.0"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
   @homepage_url "https://hex.pm/packages/amp_sdk"
   @docs_url "https://hexdocs.pm/amp_sdk"
@@ -69,7 +69,7 @@ defmodule AmpSdk.MixProject do
   end
 
   defp cli_subprocess_core_dep do
-    workspace_dep(:cli_subprocess_core, "~> 0.4.0")
+    workspace_dep(:cli_subprocess_core, "~> 0.7.0")
   end
 
   defp description do
@@ -96,6 +96,7 @@ defmodule AmpSdk.MixProject do
         {"guides/testing.md", title: "Testing"},
         {"guides/tools-and-management.md", title: "Tools And Management"},
         {"guides/migrating-to-0.7.md", title: "Migrating to 0.7"},
+        {"guides/migrating-to-0.8.md", title: "Migrating to 0.8"},
         {"guides/migrating-to-0.6.md", title: "Migrating to 0.6"},
         {"guides/provider_behavior_manifest.md", title: "Provider Behavior Manifest"},
         {"examples/README.md", title: "Examples", filename: "examples"},
@@ -121,6 +122,7 @@ defmodule AmpSdk.MixProject do
         ],
         Examples: ["examples/README.md"],
         Reference: [
+          "guides/migrating-to-0.8.md",
           "guides/migrating-to-0.7.md",
           "guides/migrating-to-0.6.md",
           "CHANGELOG.md",
@@ -212,7 +214,6 @@ defmodule AmpSdk.MixProject do
 
   defp before_closing_body_tag(:html), do: ""
   defp before_closing_body_tag(:epub), do: ""
-
 
   # In a source checkout the registry decides the source (path first). In a
   # published package there is no registry, and the requirement stated here is
