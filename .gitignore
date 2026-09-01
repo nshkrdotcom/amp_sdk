@@ -41,6 +41,3 @@ examples/**/*.plt.hash
 
 # Amp CLI workspace-local settings
 /.amp/
-
-# Workspace-local dependency source overrides
-/.dependency_sources.local.exs

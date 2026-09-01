@@ -20,10 +20,8 @@ defmodule AmpSdk.DependencyBoundaryTest do
   end
 
   test "publish mode selects cli_subprocess_core 0.7 from Hex" do
-    assert "~> 0.7.0" ==
-             @repo_root
-             |> DependencySources.deps(publish?: true)
-             |> Keyword.fetch!(:cli_subprocess_core)
+    assert {:cli_subprocess_core, "~> 0.7.0"} =
+             List.keyfind(Mix.Project.config()[:deps], :cli_subprocess_core, 0)
   end
 
   test "public implementation does not expose raw Execution Plane modules" do
