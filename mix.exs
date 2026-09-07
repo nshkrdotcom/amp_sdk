@@ -4,7 +4,7 @@ defmodule AmpSdk.MixProject do
   use Mix.Project
 
   @app :amp_sdk
-  @version "0.8.0"
+  @version "0.9.0"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
   @homepage_url "https://hex.pm/packages/amp_sdk"
   @docs_url "https://hexdocs.pm/amp_sdk"
@@ -59,7 +59,7 @@ defmodule AmpSdk.MixProject do
   end
 
   defp cli_subprocess_core_dep do
-    workspace_dep({:cli_subprocess_core, "~> 0.7.0"})
+    workspace_dep({:cli_subprocess_core, "~> 0.8.0"})
   end
 
   defp description do

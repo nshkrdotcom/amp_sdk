@@ -11,17 +11,17 @@ defmodule AmpSdk.DependencyBoundaryTest do
   ]
 
   test "amp_sdk does not declare ASM or sibling SDK deps" do
-    assert_forbidden_deps_absent(Mix.Project.config()[:deps], @forbidden_deps)
+    assert_forbidden_deps_absent(standalone_deps(), @forbidden_deps)
   end
 
-  test "release metadata targets Amp SDK 0.8.0 on Elixir 1.19" do
-    assert Mix.Project.config()[:version] == "0.8.0"
+  test "release metadata targets Amp SDK 0.9.0 on Elixir 1.19" do
+    assert Mix.Project.config()[:version] == "0.9.0"
     assert Mix.Project.config()[:elixir] == "~> 1.19"
   end
 
-  test "publish mode selects cli_subprocess_core 0.7 from Hex" do
-    assert {:cli_subprocess_core, "~> 0.7.0"} =
-             List.keyfind(Mix.Project.config()[:deps], :cli_subprocess_core, 0)
+  test "publish mode selects cli_subprocess_core 0.8 from Hex" do
+    assert {:cli_subprocess_core, "~> 0.8.0"} =
+             List.keyfind(standalone_deps(), :cli_subprocess_core, 0)
   end
 
   test "public implementation does not expose raw Execution Plane modules" do
@@ -42,4 +42,18 @@ defmodule AmpSdk.DependencyBoundaryTest do
 
   defp dep_name({name, _requirement}), do: name
   defp dep_name({name, _requirement, _opts}), do: name
+
+  defp standalone_deps do
+    code =
+      "Mix.Project.config()[:deps] |> :erlang.term_to_binary() |> Base.encode64() |> IO.puts()"
+
+    {output, 0} =
+      System.cmd("mix", ["run", "--no-start", "--no-compile", "--no-deps-check", "-e", code],
+        cd: Path.expand("../..", __DIR__),
+        env: [{"MIX_WORKSPACE_OPS_BOOTSTRAP", nil}, {"MIX_EXS", nil}],
+        stderr_to_stdout: true
+      )
+
+    output |> String.trim() |> Base.decode64!() |> :erlang.binary_to_term()
+  end
 end
