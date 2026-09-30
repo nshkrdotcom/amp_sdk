@@ -14,13 +14,13 @@ defmodule AmpSdk.DependencyBoundaryTest do
     assert_forbidden_deps_absent(standalone_deps(), @forbidden_deps)
   end
 
-  test "release metadata targets Amp SDK 0.9.0 on Elixir 1.19" do
-    assert Mix.Project.config()[:version] == "0.9.0"
+  test "release metadata targets Amp SDK 0.9.2 on Elixir 1.19" do
+    assert Mix.Project.config()[:version] == "0.9.2"
     assert Mix.Project.config()[:elixir] == "~> 1.19"
   end
 
   test "publish mode selects cli_subprocess_core 0.8 from Hex" do
-    assert {:cli_subprocess_core, "~> 0.8.0"} =
+    assert {:cli_subprocess_core, "~> 0.9.3"} =
              List.keyfind(standalone_deps(), :cli_subprocess_core, 0)
   end
 

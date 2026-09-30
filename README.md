@@ -45,7 +45,7 @@ Add `amp_sdk` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:amp_sdk, "~> 0.9.0"}
+    {:amp_sdk, "~> 0.9.2"}
   ]
 end
 ```
@@ -299,7 +299,7 @@ All execution behavior is controlled through `AmpSdk.Types.Options`:
 ```elixir
 %AmpSdk.Types.Options{
   cwd: "/path/to/project",           # Working directory (default: cwd)
-  mode: "smart",                      # Agent mode (see table below)
+  mode: "medium",                      # Agent mode (see table below)
   dangerously_allow_all: false,       # Skip all permission prompts
   visibility: "workspace",            # Thread visibility
   continue_thread: nil,               # true | "thread-id" | nil
@@ -331,12 +331,12 @@ All execution behavior is controlled through `AmpSdk.Types.Options`:
 
 | Mode | SDK Compatible | Description |
 |---|---|---|
-| `"smart"` | Yes | Default balanced mode |
+| `"medium"` | Mock rendering verified | Default balanced mode |
 | `"rush"` | No | Faster execution (CLI-only, no `--stream-json` support) |
 | `"deep"` | No | More thorough analysis (CLI-only, no `--stream-json` support) |
 | `"free"` | No | Interactive-only (incompatible with `--execute`) |
 
-> **Note:** Only `"smart"` mode supports `--stream-json`, which the SDK requires. Other modes can only be used via the CLI directly.
+Current [Amp modes](https://ampcode.com/modes) are `low`, `medium` (default), `high`, `ultra`, and `puck`. These values are forwarded unchanged. Current-mode rendering is mocked; streaming availability has not been verified with a live account. The legacy rows above record older CLI behavior.
 
 ### Thread Visibility
 
@@ -830,7 +830,7 @@ permissions = [
 {:ok, review} = AmpSdk.run(
   "Review the code in lib/ for bugs, security issues, and style problems. Be thorough.",
   %Options{
-    mode: "smart",
+    mode: "medium",
     permissions: permissions,
     visibility: "private"
   }

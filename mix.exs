@@ -4,7 +4,7 @@ defmodule AmpSdk.MixProject do
   use Mix.Project
 
   @app :amp_sdk
-  @version "0.9.0"
+  @version "0.9.2"
   @source_url "https://github.com/nshkrdotcom/amp_sdk"
   @homepage_url "https://hex.pm/packages/amp_sdk"
   @docs_url "https://hexdocs.pm/amp_sdk"
@@ -49,17 +49,17 @@ defmodule AmpSdk.MixProject do
   defp deps do
     [
       cli_subprocess_core_dep(),
-      {:jason, "~> 1.4"},
-      {:zoi, "~> 0.18"},
-      {:ex_doc, "~> 0.40", only: :dev, runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:jason, "~> 1.4.5"},
+      {:zoi, "~> 0.18.11"},
+      {:ex_doc, "~> 0.40.4", only: :dev, runtime: false},
+      {:dialyxir, "~> 1.4.8", only: [:dev, :test], runtime: false},
+      {:credo, "~> 1.7.19", only: [:dev, :test], runtime: false},
       {:supertester, "~> 0.6.0", only: :test}
     ]
   end
 
   defp cli_subprocess_core_dep do
-    workspace_dep({:cli_subprocess_core, "~> 0.8.0"})
+    workspace_dep({:cli_subprocess_core, "~> 0.9.3"})
   end
 
   defp description do

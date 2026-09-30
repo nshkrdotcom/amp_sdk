@@ -1287,7 +1287,7 @@ defmodule AmpSdk.Types do
             no_jetbrains: boolean()
           }
     defstruct cwd: nil,
-              mode: "smart",
+              mode: "medium",
               dangerously_allow_all: false,
               visibility: "workspace",
               settings_file: nil,

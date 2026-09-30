@@ -56,7 +56,7 @@ permissions = [
 
 {:ok, review} = AmpSdk.run("Review the code in lib/", %Options{
   permissions: permissions,
-  mode: "smart"
+  mode: "medium"
 })
 ```
 

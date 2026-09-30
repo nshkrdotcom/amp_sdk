@@ -45,6 +45,16 @@ defmodule AmpSdk.RuntimeCLIRenderTest do
     assert "--no-notifications" in args
   end
 
+  test "renders current Amp modes and defaults to medium without spawning the CLI" do
+    assert %Options{}.mode == "medium"
+
+    for mode <- ["low", "medium", "high", "ultra", "puck"] do
+      assert {:ok, render} = CLI.render_for_test(prompt: "hello", options: %Options{mode: mode})
+      assert flag_value(render.args, "--mode") == mode
+      assert "--stream-json" in render.args
+    end
+  end
+
   defp flag_value(args, flag) do
     case Enum.find_index(args, &(&1 == flag)) do
       nil -> nil

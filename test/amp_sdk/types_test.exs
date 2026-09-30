@@ -375,7 +375,7 @@ defmodule AmpSdk.TypesTest do
   describe "Options struct" do
     test "defaults" do
       opts = %Options{}
-      assert opts.mode == "smart"
+      assert opts.mode == "medium"
       assert opts.visibility == "workspace"
       assert opts.dangerously_allow_all == false
       assert opts.env == %{}

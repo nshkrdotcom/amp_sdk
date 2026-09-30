@@ -84,7 +84,7 @@ All options are passed via `AmpSdk.Types.Options`:
 alias AmpSdk.Types.Options
 
 AmpSdk.run("Review this code", %Options{
-  mode: "smart",
+  mode: "medium",
   visibility: "private",
   dangerously_allow_all: true
 })

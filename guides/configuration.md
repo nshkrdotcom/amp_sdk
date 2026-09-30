@@ -15,7 +15,7 @@ For model selection specifically, Amp is payload-only in this repo today:
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `cwd` | `String.t()` | `File.cwd!()` | Working directory for the Amp agent |
-| `mode` | `String.t()` | `"smart"` | Agent mode (see below) |
+| `mode` | `String.t()` | `"medium"` | Agent mode (see below) |
 | `dangerously_allow_all` | `boolean()` | `false` | Skip all permission prompts |
 | `visibility` | `String.t()` | `"workspace"` | Thread visibility |
 | `continue_thread` | `boolean \| String.t()` | `nil` | Continue a thread |
@@ -96,15 +96,15 @@ surface as structured `:cli_not_found` errors with the remote stderr attached.
 
 | Mode | SDK Compatible | Description |
 |---|---|---|
-| `"smart"` | Yes | Default — balanced model and tool selection |
+| `"medium"` | Mock rendering verified | Default balanced mode |
 | `"rush"` | No | Faster execution, incompatible with `--stream-json` |
 | `"deep"` | No | Thorough analysis, incompatible with `--stream-json` |
 | `"free"` | No | Interactive-only, incompatible with `--execute` |
 
-> **Important:** Only `"smart"` mode supports `--stream-json`, which the SDK uses for both `execute/2` and `run/2`. The other modes (`rush`, `deep`) are only usable via the CLI directly (for example `amp --mode deep --execute "prompt"` without `--stream-json`). `"free"` mode is interactive-only and cannot be used programmatically at all. This is a CLI restriction, not an SDK limitation.
+Current [Amp modes](https://ampcode.com/modes) are `low`, `medium` (default), `high`, `ultra`, and `puck`. Values are forwarded unchanged. Mock tests verify rendering; live streaming availability is unverified. Legacy rows describe older CLI behavior.
 
 ```elixir
-# Default smart mode (the only mode that works with the SDK)
+# Default medium mode
 AmpSdk.execute("Explain this code") |> Enum.each(&handle/1)
 {:ok, result} = AmpSdk.run("Explain this code")
 ```

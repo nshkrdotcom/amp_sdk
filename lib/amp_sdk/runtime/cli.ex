@@ -721,7 +721,7 @@ defmodule AmpSdk.Runtime.CLI do
   defp options_from_provider_opts(opts) do
     %Options{
       model_payload: Keyword.get(opts, :model_payload),
-      mode: Keyword.get(opts, :mode, "smart"),
+      mode: Keyword.get(opts, :mode, "medium"),
       dangerously_allow_all: Keyword.get(opts, :dangerously_allow_all, false),
       visibility: Keyword.get(opts, :visibility, "workspace"),
       log_level: Keyword.get(opts, :log_level),

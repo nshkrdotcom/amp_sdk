@@ -120,7 +120,7 @@ The `AmpSdk.Stream.build_args/1` function is public for testing:
 ```elixir
 test "builds correct CLI args" do
   args = AmpSdk.Stream.build_args(%AmpSdk.Types.Options{
-    mode: "smart",
+    mode: "medium",
     visibility: "private",
     labels: ["ci"]
   })
