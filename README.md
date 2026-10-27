@@ -9,6 +9,8 @@
 
 # Amp SDK for Elixir
 
+Next release: **0.9.3** (unreleased).
+
 An idiomatic Elixir SDK for [Amp](https://ampcode.com) (by Sourcegraph) -- the agentic coding assistant. Wraps the Amp CLI with streaming JSON output, multi-turn conversations, thread management, MCP server integration, and fine-grained permission control.
 
 > **Note:** This SDK requires the Amp CLI to be installed on the host machine. The SDK communicates with Amp exclusively through its `--execute --stream-json` interface -- no direct API calls are made.
@@ -45,7 +47,7 @@ Add `amp_sdk` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:amp_sdk, "~> 0.9.2"}
+    {:amp_sdk, "~> 0.9.3"}
   ]
 end
 ```
